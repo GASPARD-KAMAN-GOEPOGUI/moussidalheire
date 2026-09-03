@@ -1,0 +1,215 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --radius: 0.85rem;
+
+  /* Neutral warm stone scale */
+  --background: 32 40% 98%;
+  --foreground: 20 22% 13%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 20 22% 13%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 20 22% 13%;
+
+  /* Terracotta — earth, clay, community */
+  --primary: 18 68% 42%;
+  --primary-foreground: 30 45% 98%;
+
+  /* Warm sand */
+  --secondary: 32 35% 93%;
+  --secondary-foreground: 20 30% 20%;
+
+  --muted: 30 25% 94%;
+  --muted-foreground: 25 12% 42%;
+
+  /* Deep forest — lineage, growth */
+  --accent: 152 28% 27%;
+  --accent-foreground: 40 40% 97%;
+
+  --destructive: 5 72% 48%;
+  --destructive-foreground: 30 45% 98%;
+
+  --success: 142 45% 32%;
+  --success-foreground: 40 40% 97%;
+
+  --info: 212 70% 45%;
+  --info-foreground: 210 40% 98%;
+
+  --border: 28 20% 88%;
+  --input: 28 20% 88%;
+  --ring: 18 68% 42%;
+
+  --chart-1: 18 68% 48%;
+  --chart-2: 152 28% 32%;
+  --chart-3: 40 70% 55%;
+  --chart-4: 200 45% 42%;
+  --chart-5: 280 25% 48%;
+
+  --sidebar: 22 30% 12%;
+  --sidebar-foreground: 32 25% 92%;
+  --sidebar-primary: 18 72% 52%;
+  --sidebar-primary-foreground: 20 20% 10%;
+  --sidebar-accent: 22 25% 18%;
+  --sidebar-accent-foreground: 32 25% 92%;
+  --sidebar-border: 22 20% 20%;
+}
+
+.dark {
+  --background: 20 18% 8%;
+  --foreground: 32 25% 94%;
+
+  --card: 20 16% 11%;
+  --card-foreground: 32 25% 94%;
+
+  --popover: 20 16% 11%;
+  --popover-foreground: 32 25% 94%;
+
+  --primary: 20 78% 56%;
+  --primary-foreground: 20 30% 10%;
+
+  --secondary: 22 14% 16%;
+  --secondary-foreground: 32 25% 90%;
+
+  --muted: 22 14% 15%;
+  --muted-foreground: 30 12% 65%;
+
+  --accent: 150 30% 42%;
+  --accent-foreground: 20 20% 10%;
+
+  --destructive: 5 75% 58%;
+  --destructive-foreground: 20 20% 10%;
+
+  --success: 142 40% 45%;
+  --success-foreground: 20 20% 10%;
+
+  --info: 212 75% 62%;
+  --info-foreground: 210 30% 10%;
+
+  --border: 22 14% 20%;
+  --input: 22 14% 20%;
+  --ring: 20 78% 56%;
+
+  --chart-1: 20 75% 58%;
+  --chart-2: 150 30% 45%;
+  --chart-3: 40 70% 60%;
+  --chart-4: 200 55% 55%;
+  --chart-5: 280 35% 62%;
+
+  --sidebar: 20 20% 6%;
+  --sidebar-foreground: 32 20% 88%;
+  --sidebar-primary: 20 78% 56%;
+  --sidebar-primary-foreground: 20 20% 10%;
+  --sidebar-accent: 22 16% 12%;
+  --sidebar-accent-foreground: 32 20% 88%;
+  --sidebar-border: 22 14% 16%;
+}
+
+@theme inline {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Manrope", ui-sans-serif, system-ui, sans-serif;
+
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-success: hsl(var(--success));
+  --color-success-foreground: hsl(var(--success-foreground));
+  --color-info: hsl(var(--info));
+  --color-info-foreground: hsl(var(--info-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  --color-chart-1: hsl(var(--chart-1));
+  --color-chart-2: hsl(var(--chart-2));
+  --color-chart-3: hsl(var(--chart-3));
+  --color-chart-4: hsl(var(--chart-4));
+  --color-chart-5: hsl(var(--chart-5));
+
+  --color-sidebar: hsl(var(--sidebar));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-primary: hsl(var(--sidebar-primary));
+  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+
+  --radius-sm: calc(var(--radius) - 0.35rem);
+  --radius-md: calc(var(--radius) - 0.15rem);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 0.35rem);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* `hidden` alone would force the browser to compute overflow-y as `auto`
+     (CSS spec: one axis non-visible + the other visible → the visible one
+     becomes auto), turning html/body into their own scroll container and
+     breaking `position: sticky` everywhere (e.g. the app header). `clip`
+     still prevents horizontal scrollbars without that side effect. */
+  html, body {
+    overflow-x: clip;
+    /* Kills the browser's elastic "rubber-band" bounce past the top/bottom
+       of the page. Without this, an aggressive scroll (mouse wheel fling,
+       trackpad, touch) overshoots past the document's real bounds, and the
+       sticky `Header` — pinned to this same scroll container — visibly
+       wobbles along with that overshoot before settling back. */
+    overscroll-behavior-y: none;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display;
+  }
+
+  ::selection {
+    @apply bg-primary/20 text-foreground;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .bg-grain {
+    background-image: radial-gradient(circle at 1px 1px, hsl(var(--foreground) / 0.06) 1px, transparent 0);
+    background-size: 22px 22px;
+  }
+}

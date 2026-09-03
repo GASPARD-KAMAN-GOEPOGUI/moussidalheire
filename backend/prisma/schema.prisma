@@ -1,0 +1,497 @@
+// Prisma schema.
+//
+// MODULE 01 (utilisateurs) — CRUD backend done, auth flows still a future phase.
+// Business models (Personne, Famille, Union, Lieu, ResidencePersonne, Actualite,
+// Branche, CategorieActualite) are declared below. No migration has been
+// generated/applied for them yet —
+// this phase is models only; `villagedb` still only has the `utilisateurs`
+// table from MODULE 01 on disk. See the models phase report for details.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+/// Compte d'authentification (identifiant + mot de passe). Volontairement distinct
+/// de la future fiche "personne" du recensement villageois : un utilisateur peut
+/// exister sans personne rattachée (ex. compte administrateur créé avant tout
+/// recensement), et une personne du recensement peut ne jamais avoir de compte
+/// (mineur, personne décédée, fiche saisie par un tiers). Voir `personneId`
+/// ci-dessous pour le choix retenu tant que le module `personnes` n'existe pas.
+///
+/// Aucune suppression physique n'est jamais effectuée sur cette table par
+/// l'application : `supprime`/`supprimeLe` portent la suppression logique.
+model Utilisateur {
+  /// Clé primaire interne — jamais exposée dans l'API publique.
+  id Int @id @default(autoincrement())
+
+  /// Identifiant public exposé par l'API (routes /api/v1/utilisateurs/:id).
+  uuid String @unique @default(uuid()) @db.Char(36)
+
+  /// Identifiant de connexion, unique, choisi par l'utilisateur ou attribué.
+  identifiant String @unique @db.VarChar(50)
+
+  /// Optionnel, mais unique lorsqu'il est renseigné (NULL n'entre jamais en
+  /// conflit avec un autre NULL sous une contrainte UNIQUE MySQL). Capped at 191
+  /// (not 255): with the table's utf8mb4 charset (4 bytes/char), a UNIQUE index
+  /// on a 255-char column exceeds this server's max key length (1000 bytes) —
+  /// 191 is the standard utf8mb4-safe cap for a uniquely-indexed VARCHAR (the
+  /// well-known workaround for this exact MySQL/MariaDB limitation). Slightly
+  /// below RFC 5321's 254-octet theoretical max, which in practice is never hit
+  /// by real-world addresses.
+  email String? @unique @db.VarChar(191)
+
+  /// Hash bcrypt uniquement — jamais le mot de passe en clair. Ne doit jamais
+  /// être sélectionné dans une réponse API (voir toUtilisateurPublic()).
+  motDePasseHash String @map("mot_de_passe_hash") @db.VarChar(255)
+
+  /// Le modèle `personnes` existe désormais (voir plus bas) : la relation Prisma
+  /// est déclarée ici comme prévu, mais AUCUNE migration n'a encore été générée
+  /// pour l'ajouter à `villagedb` — la colonne `personne_id` y existe déjà (créée
+  /// par MODULE 01, sans contrainte), donc rien ne casse ; la contrainte
+  /// FOREIGN KEY (et le `@unique` ci-dessous) sera posée lors de la prochaine
+  /// migration (phase suivante), pas dans cette phase "models only". `@unique` :
+  /// au plus un compte par personne (relation 1:1, pas 1:N).
+  personneId Int?      @unique @map("personne_id")
+  personne   Personne? @relation(fields: [personneId], references: [id])
+
+  /// Chaque fiche `Personne` que ce compte a réellement saisie (`POST
+  /// /personnes`, "Ajouter mes enfants", "Ajouter mon/ma conjoint·e", ou les
+  /// père/mère/fratrie saisis pendant sa propre inscription) — voir
+  /// `Personne.creeParUtilisateurId`. Distinct de `personne` ci-dessus (sa
+  /// propre fiche) : les deux droits de modification sont vérifiés
+  /// séparément, jamais confondus.
+  personnesCreees Personne[] @relation("PersonnesCreees")
+
+  /// Compte utilisable. Bascule à false par /desactiver, à true par /reactiver.
+  actif Boolean @default(true)
+
+  /// Suppression logique. Dans ce module, `actif` et `supprime` sont pilotés
+  /// ensemble par /desactiver et /reactiver (un seul état "compte désactivé =
+  /// supprimé logiquement" — voir utilisateurs.service.ts).
+  supprime Boolean @default(false)
+
+  /// Renseigné uniquement quand `supprime = true` ; remis à null par /reactiver.
+  supprimeLe DateTime? @map("supprime_le")
+
+  /// Réservé à la future authentification (non écrit par ce module CRUD).
+  dernierAcces DateTime? @map("dernier_acces")
+
+  /// `membre` par défaut (attribué par l'auto-inscription). `admin` ne
+  /// s'obtient jamais via l'API — promotion manuelle en base uniquement (voir
+  /// le rapport de la mission RBAC). Un seul rôle élevé, volontairement : pas
+  /// de hiérarchie de rôles tant qu'aucun besoin réel ne la justifie.
+  role RoleUtilisateur @default(membre)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([personneId])
+  @@index([actif])
+  @@index([supprime, actif])
+  @@map("utilisateurs")
+}
+
+enum RoleUtilisateur {
+  membre
+  admin
+}
+
+// =============================================================================
+// Enums partagés — petites listes fixes, sans attribut propre (pas de table
+// dédiée justifiée pour elles ; voir le rapport de la phase "models" pour le
+// détail de ce choix, entité par entité).
+// =============================================================================
+
+enum Sexe {
+  homme
+  femme
+}
+
+/// Statut civil déclaré d'une personne. Volontairement distinct de `StatutUnion`
+/// (l'état de l'union elle-même) : les deux peuvent diverger dans le temps
+/// (ex. une personne "veuf" par une union passée, sans union active enregistrée).
+enum StatutMatrimonial {
+  celibataire
+  marie
+  divorce
+  veuf
+}
+
+/// État d'une union entre deux personnes.
+enum StatutUnion {
+  marie
+  divorce
+  veuf
+  partenaire
+}
+
+/// Visibilité d'une donnée de profil (coordonnées, fiche complète, ...).
+enum Visibilite {
+  public
+  membres
+  prive
+}
+
+// =============================================================================
+// Personne — fiche centrale du recensement villageois.
+// =============================================================================
+
+/// Un habitant du village, vivant ou décédé, y compris les fiches minimales
+/// créées pour un père/une mère dont on ne connaît que le nom. `pereId`/`mereId`
+/// sont les seules colonnes de filiation stockées ; enfants et fratrie ne sont
+/// jamais stockés (ni `children_ids`, ni `sibling_ids`, ni `spouse_ids`) — ils
+/// se déduisent des relations Prisma ci-dessous (`enfantsCommePere`/
+/// `enfantsCommeMere` pour les enfants ; la fratrie se déduit en filtrant les
+/// personnes qui partagent le même `pereId` ou `mereId`, à faire au niveau
+/// requête/service, pas ici). Les conjoints se déduisent de `Union`.
+model Personne {
+  id        Int     @id @default(autoincrement())
+  uuid      String  @unique @default(uuid()) @db.Char(36)
+  matricule String? @unique @db.VarChar(20)
+
+  prenom String  @db.VarChar(100)
+  nom    String  @db.VarChar(100)
+  surnom String? @db.VarChar(100)
+  sexe   Sexe
+
+  photo String? @db.VarChar(500)
+
+  dateNaissance DateTime? @map("date_naissance") @db.Date
+  /// Texte libre (ex. "Moussidalheire, quartier Centre") — distinct du
+  /// référentiel `Lieu` utilisé par `ResidencePersonne` : la naissance n'est
+  /// pas un lieu de résidence réutilisable dans le temps, juste une mention.
+  lieuNaissance String? @map("lieu_naissance") @db.VarChar(150)
+  /// Simple statut vivant·e/décédé·e — jamais de date de décès stockée (retiré
+  /// au profit de ce booléen : le recensement n'exige pas cette précision, et
+  /// l'imposer bloquait la création d'une fiche minimale père/mère pendant
+  /// l'inscription quand la date exacte n'est pas connue).
+  estDecede Boolean @default(false) @map("est_decede")
+
+  statutMatrimonial StatutMatrimonial? @map("statut_matrimonial")
+  profession        String?            @db.VarChar(150)
+  niveauEtudes      String?            @map("niveau_etudes") @db.VarChar(100)
+  bio               String?            @db.Text
+
+  /// Situation géographique simplifiée — deux booléens, jamais une table/relation
+  /// géographique. `estAuVillage = true` implique toujours `estEnGuinee = true`
+  /// (appliqué à l'écriture, voir personne.service.ts::normaliserSituationGeographique) ;
+  /// cette combinaison n'a donc de sens que lue avec `estAuVillage` en priorité :
+  /// au village → au village ; sinon si `estEnGuinee` → ailleurs en Guinée ; sinon →
+  /// à l'étranger. Distinct de `ResidencePersonne`/`Lieu` (ville précise, historique) :
+  /// les deux systèmes coexistent, celui-ci ne sert que la répartition
+  /// village/Guinée/étranger. Non pertinent pour une personne décédée (jamais
+  /// affiché ni compté côté frontend quand `estDecede = true`), mais toujours
+  /// une vraie colonne (jamais nulle) pour éviter un état incohérent en base.
+  estAuVillage Boolean @default(true) @map("est_au_village")
+  estEnGuinee  Boolean @default(true) @map("est_en_guinee")
+
+  /// Unique quand renseigné (comme `Utilisateur.email`/`matricule` ci-dessus) —
+  /// sert aussi de moyen de connexion (voir auth.service.ts::connecter), donc
+  /// deux fiches ne peuvent jamais partager le même numéro.
+  telephone String? @unique @db.VarChar(30)
+  /// Unique quand renseigné, y compris pour les fiches sans compte utilisateur
+  /// (père/mère/fratrie/conjoint créés sans connexion) — distinct de
+  /// `Utilisateur.email`, qui reste la seule contrainte tant qu'aucune fiche
+  /// `Personne` correspondante n'existait pour ce champ.
+  email     String? @unique @db.VarChar(191)
+  whatsapp  String? @db.VarChar(30)
+
+  visibiliteContacts Visibilite @default(membres) @map("visibilite_contacts")
+  visibiliteProfil   Visibilite @default(public) @map("visibilite_profil")
+
+  actif      Boolean @default(true)
+  generation Int     @default(0)
+
+  brancheId Int? @map("branche_id")
+  familleId Int  @map("famille_id")
+  pereId    Int? @map("pere_id")
+  mereId    Int? @map("mere_id")
+
+  /// L'utilisateur qui a réellement saisi cette fiche — SEULE source du droit
+  /// de modification pour un `membre` standard, avec "c'est sa propre fiche"
+  /// (`Utilisateur.personneId`). Jamais déduit de `familleId`/`pereId`/
+  /// `mereId`/`brancheId` : un lien familial ne donne aucun droit de
+  /// modification (voir personne.service.ts::peutModifierPersonne). Nullable
+  /// et jamais rétro-rempli : les fiches déjà existantes au moment de
+  /// l'introduction de ce champ n'ont aucun créateur connu — seul un admin
+  /// peut alors les modifier, jamais un membre.
+  creeParUtilisateurId Int? @map("cree_par_utilisateur_id")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  famille          Famille      @relation("FamilleMembres", fields: [familleId], references: [id])
+  branche          Branche?     @relation(fields: [brancheId], references: [id])
+  pere             Personne?    @relation("FiliationPaternelle", fields: [pereId], references: [id])
+  mere             Personne?    @relation("FiliationMaternelle", fields: [mereId], references: [id])
+  creeParUtilisateur Utilisateur? @relation("PersonnesCreees", fields: [creeParUtilisateurId], references: [id])
+
+  /// Enfants dont cette personne est le père — l'unique source pour "les enfants de X".
+  enfantsCommePere Personne[] @relation("FiliationPaternelle")
+  /// Enfants dont cette personne est la mère.
+  enfantsCommeMere Personne[] @relation("FiliationMaternelle")
+
+  /// Famille dont cette personne est l'ancêtre/fondateur·rice (au plus une, voir
+  /// `Famille.ancetreId @unique`) — inverse de `Famille.ancetre`.
+  familleFondee Famille? @relation("FamilleAncetre")
+
+  /// Unions où cette personne apparaît — côté époux ou côté épouse ; les
+  /// conjoints d'une personne se déduisent de ces deux collections, jamais
+  /// d'une colonne `spouse_id`/`spouse_ids` sur `Personne`.
+  unionsCommeEpoux  Union[] @relation("UnionsCommeEpoux")
+  unionsCommeEpouse Union[] @relation("UnionsCommeEpouse")
+
+  residences        ResidencePersonne[]
+  compteUtilisateur Utilisateur?
+
+  @@index([familleId])
+  @@index([pereId])
+  @@index([mereId])
+  @@index([brancheId])
+  @@index([generation])
+  @@index([actif])
+  @@index([creeParUtilisateurId])
+  @@map("personnes")
+}
+
+// =============================================================================
+// Famille
+// =============================================================================
+
+/// Une lignée/patronyme du village. `ancetreId` référence `Personne.id` : voir
+/// la note sur la relation circulaire famille↔personne juste en dessous.
+model Famille {
+  id              Int     @id @default(autoincrement())
+  uuid            String  @unique @default(uuid()) @db.Char(36)
+  nom             String  @db.VarChar(150)
+  description     String? @db.Text
+  histoire        String? @db.Text
+  devise          String? @db.VarChar(200)
+  imageCouverture String? @map("image_couverture") @db.VarChar(500)
+
+  /// Nullable + unique, volontairement : `familles` et `personnes` se
+  /// référencent mutuellement (personnes.famille_id → familles.id, et
+  /// familles.ancetre_id → personnes.id). Nullable permet de créer la famille
+  /// AVANT que son fondateur n'existe (ou l'inverse) sans jamais violer une
+  /// contrainte NOT NULL le temps de la transaction applicative ; unique
+  /// garantit qu'une personne ne fonde jamais plus d'une famille.
+  ancetreId Int? @unique @map("ancetre_id")
+
+  /// Chaîne famille relative → famille parente → ... → famille fondatrice
+  /// (celle dont `familleParenteId` est null). Distinct de `ancetreId` (qui
+  /// pointe vers une Personne) : un père n'a pas automatiquement de ligne
+  /// Famille le désignant comme ancêtre, donc ce lien famille-à-famille est
+  /// une information à part, jamais dérivable des seules relations
+  /// pereId/mereId de Personne.
+  familleParenteId Int? @map("famille_parente_id")
+
+  /// Positionné UNE SEULE FOIS à la création (`familleParenteId` absent au
+  /// moment de créer = vraie famille fondatrice), jamais modifié ensuite —
+  /// y compris si `familleParenteId` change ou est effacé plus tard
+  /// ("couper le rattachement" d'une descendante). Nécessaire car
+  /// `familleParenteId === null` seul ne suffit pas à distinguer une VRAIE
+  /// fondatrice d'une famille descendante temporairement sans parent : les
+  /// deux auraient sinon exactement la même valeur. `estFondatrice` (calculé
+  /// à la volée depuis `familleParenteId`) reste la source de vérité pour la
+  /// hiérarchie/chaîne ; ce champ-ci ne sert qu'à classer l'entité de façon
+  /// permanente (onglet "Familles fondatrices" vs "Familles descendantes").
+  estFondatriceOrigine Boolean @default(false) @map("est_fondatrice_origine")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  ancetre    Personne?   @relation("FamilleAncetre", fields: [ancetreId], references: [id])
+  membres    Personne[]  @relation("FamilleMembres")
+  branches   Branche[]
+  actualites Actualite[]
+
+  familleParente    Famille?  @relation("FamilleHierarchie", fields: [familleParenteId], references: [id])
+  famillesRelatives Famille[] @relation("FamilleHierarchie")
+
+  @@index([ancetreId])
+  @@index([familleParenteId])
+  @@map("familles")
+}
+
+// =============================================================================
+// Union — relie exactement deux personnes (jamais plus).
+// =============================================================================
+
+/// Une union (mariage, partenariat, ...) entre deux personnes. Une personne
+/// peut apparaître dans plusieurs lignes `Union` (plusieurs conjoints /
+/// remariages) — c'est cette table, et uniquement elle, qui porte cette
+/// relation N:N ; `Personne` ne stocke ni `spouse_id` ni `spouse_ids`.
+/// Les enfants d'une union ne sont pas stockés ici (pas de `children_ids`) :
+/// ils se déduisent en croisant `Personne.pereId`/`mereId` avec les deux
+/// membres de l'union, au niveau requête/service.
+model Union {
+  id   Int    @id @default(autoincrement())
+  uuid String @unique @default(uuid()) @db.Char(36)
+
+  epouxId  Int @map("epoux_id")
+  epouseId Int @map("epouse_id")
+
+  statut    StatutUnion
+  dateDebut DateTime?   @map("date_debut") @db.Date
+  dateFin   DateTime?   @map("date_fin") @db.Date
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  epoux  Personne @relation("UnionsCommeEpoux", fields: [epouxId], references: [id])
+  epouse Personne @relation("UnionsCommeEpouse", fields: [epouseId], references: [id])
+
+  @@index([epouxId])
+  @@index([epouseId])
+  @@map("unions")
+}
+
+// =============================================================================
+// Lieu — référentiel de lieux, réutilisable par plusieurs personnes.
+// =============================================================================
+
+model Lieu {
+  id         Int      @id @default(autoincrement())
+  uuid       String   @unique @default(uuid()) @db.Char(36)
+  pays       String   @db.VarChar(100)
+  region     String?  @db.VarChar(100)
+  ville      String   @db.VarChar(100)
+  quartier   String?  @db.VarChar(100)
+  latitude   Decimal? @db.Decimal(9, 6)
+  longitude  Decimal? @db.Decimal(9, 6)
+  estVillage Boolean  @default(false) @map("est_village")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  residences ResidencePersonne[]
+
+  @@index([ville])
+  @@index([pays])
+  @@map("lieux")
+}
+
+// =============================================================================
+// ResidencePersonne — historique de résidence (plusieurs périodes possibles).
+// =============================================================================
+
+/// Ne duplique jamais les informations du lieu : chaque période référence un
+/// `Lieu` par `lieuId`, jamais une copie de ville/pays/coordonnées.
+model ResidencePersonne {
+  id         Int    @id @default(autoincrement())
+  uuid       String @unique @default(uuid()) @db.Char(36)
+  personneId Int    @map("personne_id")
+  lieuId     Int    @map("lieu_id")
+
+  /// Années (pas de date complète) : c'est la précision réellement disponible
+  /// pour une résidence historique dans ce recensement.
+  anneeDebut  Int?    @map("annee_debut")
+  anneeFin    Int?    @map("annee_fin")
+  estActuelle Boolean @default(false) @map("est_actuelle")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  personne Personne @relation(fields: [personneId], references: [id])
+  lieu     Lieu     @relation(fields: [lieuId], references: [id])
+
+  @@index([personneId])
+  @@index([lieuId])
+  @@index([personneId, estActuelle])
+  @@map("residences_personnes")
+}
+
+// =============================================================================
+// Actualite
+// =============================================================================
+
+model Actualite {
+  id    Int    @id @default(autoincrement())
+  uuid  String @unique @default(uuid()) @db.Char(36)
+  titre String @db.VarChar(200)
+
+  categorieId     Int                @map("categorie_id")
+  imageCouverture String?            @map("image_couverture") @db.VarChar(500)
+  resume          String             @db.Text
+  contenu         String             @db.Text
+  /// Nom libre de l'auteur — pas de FK vers `utilisateurs`/`personnes` à ce
+  /// stade (aucune notion d'auteur authentifié n'existe encore côté API).
+  auteur          String?            @db.VarChar(150)
+  datePublication DateTime           @default(now()) @map("date_publication")
+  miseEnAvant     Boolean            @default(false) @map("mise_en_avant")
+
+  familleId Int? @map("famille_id")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  categorie CategorieActualite @relation(fields: [categorieId], references: [id])
+  famille   Famille?           @relation(fields: [familleId], references: [id])
+
+  @@index([categorieId])
+  @@index([datePublication])
+  @@index([familleId])
+  @@map("actualites")
+}
+
+// =============================================================================
+// Branche — 🟡 table à décider (statut confirmé par le donneur d'ordre).
+// =============================================================================
+
+/// `statut` : sémantique non précisée dans la conception ("🟡 à décider") — laissé
+/// en texte libre plutôt que contraint par un ENUM inventé. Aucune contrainte
+/// d'unicité ajoutée sur `nom` au-delà de ce qui est demandé, tant que le
+/// statut de cette table reste à trancher (voir rapport).
+model Branche {
+  id          Int     @id @default(autoincrement())
+  uuid        String  @unique @default(uuid()) @db.Char(36)
+  familleId   Int     @map("famille_id")
+  nom         String  @db.VarChar(150)
+  description String? @db.Text
+  statut      String? @db.VarChar(50)
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  famille   Famille    @relation(fields: [familleId], references: [id])
+  personnes Personne[]
+
+  @@index([familleId])
+  @@map("branches")
+}
+
+// =============================================================================
+// CategorieActualite — gestion dynamique des catégories d'actualités. Chaque
+// `Actualite.categorieId` référence une ligne ici ; les 9 catégories qui
+// existaient jusque-là comme ENUM (`annonce`, `evenement`, ...) ont été
+// migrées en lignes réelles (voir la migration de rattachement) — un membre
+// (rôle admin) peut désormais en créer de nouvelles depuis l'interface.
+// =============================================================================
+
+model CategorieActualite {
+  id          Int     @id @default(autoincrement())
+  uuid        String  @unique @default(uuid()) @db.Char(36)
+  nom         String  @unique @db.VarChar(100)
+  slug        String  @unique @db.VarChar(100)
+  description String? @db.Text
+  statut      String? @db.VarChar(50)
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  actualites Actualite[]
+
+  @@map("categories_actualites")
+}

@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="fr" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="color-scheme" content="light dark" />
+<meta name="supported-color-schemes" content="light dark" />
+<title>{{application}}</title>
+<!--[if mso]>
+<noscript>
+<xml>
+<o:OfficeDocumentSettings>
+<o:PixelsPerInch>96</o:PixelsPerInch>
+</o:OfficeDocumentSettings>
+</xml>
+</noscript>
+<style>
+  table { border-collapse: collapse; }
+</style>
+<![endif]-->
+<style>
+  body, table, td, a { font-family: 'Inter', Helvetica, Arial, sans-serif; }
+  img { border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic; }
+  a { color: #b44e22; }
+  @media (max-width: 620px) {
+    .msd-container { width: 100% !important; border-radius: 0 !important; }
+    .msd-padding { padding-left: 24px !important; padding-right: 24px !important; }
+  }
+</style>
+</head>
+<body style="margin:0; padding:0; background-color:#fcfaf8;">
+  <!-- Préheader : visible dans la liste des messages, jamais dans le corps affiché -->
+  <div style="display:none; max-height:0; overflow:hidden; opacity:0; mso-hide:all;">{{apercu}}</div>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#fcfaf8;">
+    <tr>
+      <td align="center" style="padding: 40px 16px;">
+        <table role="presentation" class="msd-container" width="600" cellpadding="0" cellspacing="0" style="width:600px; max-width:600px; background-color:#ffffff; border-radius:16px; border:1px solid #e7e0da;">
+          <!-- En-tête : logo + nom de l'application -->
+          <tr>
+            <td align="center" style="padding: 36px 24px 20px;">
+              <img src="cid:{{logo_cid}}" width="56" height="56" alt="{{application}}" style="display:block; border-radius:14px; margin:0 0 14px;" />
+              <div style="font-family:'Manrope',Helvetica,Arial,sans-serif; font-size:20px; font-weight:700; color:#281f1a; letter-spacing:-0.01em;">{{application}}</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 0 40px;">
+              <div style="border-top:1px solid #e7e0da; line-height:0; font-size:0;">&nbsp;</div>
+            </td>
+          </tr>
+          <!-- Contenu -->
+          <tr>
+            <td class="msd-padding" style="padding: 32px 40px; font-family:'Inter',Helvetica,Arial,sans-serif; color:#281f1a; font-size:15px; line-height:1.65;">
+              {{{content}}}
+            </td>
+          </tr>
+          <!-- Pied de page -->
+          <tr>
+            <td align="center" style="padding: 24px 32px; background-color:#f3eee7; border-top:1px solid #e7e0da; border-radius:0 0 16px 16px; font-family:'Inter',Helvetica,Arial,sans-serif; font-size:12px; line-height:1.6; color:#78695e;">
+              © {{annee}} {{application}} — la mémoire vivante du village.<br />
+              Cet e-mail contient des informations confidentielles : ne le transférez à personne.
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
