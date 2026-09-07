@@ -195,7 +195,7 @@ export default function GenealogyTreePage() {
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar">
         {loading || !index ? (
           <Skeleton className="size-full rounded-xl" />
         ) : mode === "village" ? (

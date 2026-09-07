@@ -34,7 +34,7 @@ export function Sidebar() {
         </div>
       </div>
 
-      <nav aria-label="Navigation principale" className="flex-1 space-y-1 overflow-y-auto px-3 pt-2">
+      <nav aria-label="Navigation principale" className="flex-1 space-y-1 overflow-y-auto no-scrollbar px-3 pt-2">
         {NAV_ITEMS.map((item) => (
           <NavLink
             key={item.to}

@@ -179,6 +179,14 @@
        sticky `Header` — pinned to this same scroll container — visibly
        wobbles along with that overshoot before settling back. */
     overscroll-behavior-y: none;
+    /* Scrolling itself stays fully functional (wheel, trackpad, touch,
+       keyboard) — only the visible track/thumb is hidden. */
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  html::-webkit-scrollbar, body::-webkit-scrollbar {
+    display: none;
   }
 
   body {

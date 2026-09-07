@@ -136,6 +136,21 @@ export const useAuthStore = create<AuthStore>()(
         try {
           const res = await apiRequest<MoiResponse>("/auth/moi");
           set({ utilisateur: res.utilisateur, isAuthenticated: true });
+          // `/auth/connexion` only returns `identifiant`/`email` — `user.name`
+          // falls back to those (see `userFromUtilisateur`) until this,
+          // called right after login and on every page reload (see
+          // `RequireAuth`), resolves the linked fiche's real prénom/nom.
+          if (res.utilisateur.personneUuid) {
+            const personne = await getPerson(res.utilisateur.personneUuid);
+            if (personne) {
+              set({
+                user: {
+                  name: `${personne.firstName} ${personne.lastName}`,
+                  email: res.utilisateur.email ?? res.utilisateur.identifiant,
+                },
+              });
+            }
+          }
           return true;
         } catch (err) {
           if (err instanceof ApiError && err.status === 401) {

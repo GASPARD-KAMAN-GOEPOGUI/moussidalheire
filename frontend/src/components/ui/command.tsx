@@ -75,7 +75,7 @@ const CommandList = React.forwardRef<
       // 24rem to spare (short viewport, on-screen keyboard open). Falls back
       // to the original flat 24rem outside a Popover (e.g. `CommandDialog`,
       // where the var is never set).
-      "max-h-[min(24rem,var(--radix-popover-content-available-height,24rem))] overflow-y-auto overflow-x-hidden p-2",
+      "max-h-[min(24rem,var(--radix-popover-content-available-height,24rem))] overflow-y-auto overflow-x-hidden no-scrollbar p-2",
       className,
     )}
     {...props}

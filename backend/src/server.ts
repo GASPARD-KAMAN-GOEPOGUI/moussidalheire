@@ -5,8 +5,18 @@ import { disconnectDatabase, logStartupDatabaseStatus } from "@/config/database"
 
 const app = createApp();
 
-const server = app.listen(env.PORT, () => {
-  logger.info(`✓ Serveur démarré sur le port ${env.PORT} [${env.NODE_ENV}]`);
+// En production le serveur vit derrière nginx : n'écouter que sur la boucle
+// locale, sinon le port reste joignable directement depuis l'extérieur. Un
+// client qui contourne le proxy fournit son propre X-Forwarded-For, auquel
+// `trust proxy` (voir app.ts) fait alors confiance — le rate limiting par IP
+// devient contournable. En dev on garde 0.0.0.0 pour pouvoir tester depuis un
+// téléphone du même réseau.
+const HOST = env.NODE_ENV === "production" ? "127.0.0.1" : "0.0.0.0";
+
+const server = app.listen(env.PORT, HOST, () => {
+  logger.info(
+    `✓ Serveur démarré sur ${HOST}:${env.PORT} [${env.NODE_ENV}]`,
+  );
   void logStartupDatabaseStatus();
 });
 

@@ -89,10 +89,10 @@ export default function News() {
           placeholder="Rechercher une actualité…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="max-w-md"
+          className="min-w-[200px] flex-1"
         />
         <Select value={category} onValueChange={setCategory}>
-          <SelectTrigger className="w-56">
+          <SelectTrigger className="w-56 shrink-0">
             <SelectValue placeholder="Catégorie" />
           </SelectTrigger>
           <SelectContent>
