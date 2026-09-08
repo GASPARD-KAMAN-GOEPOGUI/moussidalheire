@@ -17,6 +17,12 @@ function emptyToUndefined<T extends z.ZodTypeAny>(schema: T) {
   return z.preprocess((value) => (value === "" ? undefined : value), schema.optional());
 }
 
+/** Longueur en octets d'une chaîne base64url, ou -1 si elle n'est pas décodable. */
+function longueurBase64Url(valeur: string): number {
+  if (!/^[A-Za-z0-9_-]+$/.test(valeur)) return -1;
+  return Buffer.from(valeur, "base64url").length;
+}
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().default(5000),
@@ -78,6 +84,30 @@ const envSchema = z.object({
   SMTP_USER: emptyToUndefined(z.string().min(1)),
   SMTP_PASSWORD: emptyToUndefined(z.string().min(1)),
   SMTP_FROM: emptyToUndefined(z.string().min(1)),
+
+  // Notifications push (VAPID). Générer une paire avec
+  // `npx web-push generate-vapid-keys`, ou voir .env.example.
+  //
+  // La longueur décodée est vérifiée, pas seulement la présence : une clé
+  // tronquée au copier-coller passerait un simple `min(1)` et n'échouerait
+  // qu'au premier envoi, avec une erreur du service push illisible.
+  VAPID_PUBLIC_KEY: z
+    .string()
+    .refine((v) => longueurBase64Url(v) === 65, {
+      message: "VAPID_PUBLIC_KEY must decode to 65 bytes (uncompressed P-256 point)",
+    }),
+  VAPID_PRIVATE_KEY: z
+    .string()
+    .refine((v) => longueurBase64Url(v) === 32, {
+      message: "VAPID_PRIVATE_KEY must decode to 32 bytes (P-256 private scalar)",
+    }),
+  // Contact transmis aux services push (FCM, Mozilla) pour qu'ils puissent
+  // signaler un problème. `mailto:` ou URL https.
+  VAPID_SUBJECT: z
+    .string()
+    .refine((v) => v.startsWith("mailto:") || v.startsWith("https://"), {
+      message: "VAPID_SUBJECT must start with 'mailto:' or 'https://'",
+    }),
 
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
 }).transform((valeurs) => ({

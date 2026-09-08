@@ -157,20 +157,23 @@ describe("Utilisateurs CRUD API", () => {
       expect(res.status).toBe(400);
     });
 
-    itDb(
-      "accepts a structurally valid personneId even though the personnes table doesn't exist yet",
-      async () => {
-        const id = identifiant("personne-id");
-        const res = await post("/api/v1/utilisateurs").send({
-          identifiant: id,
-          motDePasse: "Password123",
-          personneId: 42,
-        });
+    // Ce test acceptait autrefois n'importe quel entier bien formé : la table
+    // `personnes` n'existait pas encore, et aucune clé étrangère ne contraignait
+    // `personne_id`. La contrainte existe désormais (voir schema.prisma), donc
+    // un identifiant qui ne désigne aucune fiche est rejeté — c'est ce
+    // comportement-là qu'il faut vérifier. Le cas nominal (personneId valide)
+    // est couvert par tests/auth.routes.test.ts, qui dispose d'une fixture
+    // famille + personne.
+    itDb("rejects a personneId that matches no existing personne", async () => {
+      const id = identifiant("personne-id");
+      const res = await post("/api/v1/utilisateurs").send({
+        identifiant: id,
+        motDePasse: "Password123",
+        personneId: 2_000_000_000,
+      });
 
-        expect(res.status).toBe(201);
-        expect(res.body.utilisateur.personneId).toBe(42);
-      },
-    );
+      expect(res.status).toBe(400);
+    });
   });
 
   describe("GET /api/v1/utilisateurs/:id", () => {

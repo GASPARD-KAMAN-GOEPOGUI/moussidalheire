@@ -11,6 +11,12 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Service worker ecrit a la main (src/sw.ts) plutot que genere : c'est le
+      // prerequis pour y ajouter les listeners push, que generateSW ne permet
+      // pas. Le fichier reproduit a l'identique ce que generateSW produisait.
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       includeAssets: ['favicon.jpg'],
       manifest: {
         name: 'Moussidalheire',
@@ -41,66 +47,13 @@ export default defineConfig({
           },
         ],
       },
-      workbox: {
+      // En mode injectManifest, la cle `workbox` n'est plus lue : seul le
+      // calcul du precache reste ici, les strategies de cache sont desormais
+      // ecrites dans src/sw.ts.
+      injectManifest: {
         // Le defaut omet les .jpg/.jpeg : sans ca, le logo et l'image du
         // village manquent hors ligne.
         globPatterns: ['**/*.{js,css,html,ico,png,svg,jpg,jpeg,webmanifest}'],
-        runtimeCaching: [
-          {
-            // Callback sur le pathname plutot qu'une regex sur le domaine :
-            // en production nginx sert le front et proxifie /api/v1 sur la
-            // meme origine, alors qu'en dev l'API vit sur le port 5000. Un
-            // motif base sur l'origine casserait dans l'un des deux cas.
-            urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
-            handler: 'NetworkFirst',
-            // GET seulement : rejouer une reponse POST/PATCH/DELETE depuis le
-            // cache ferait croire a une ecriture qui n'a jamais eu lieu.
-            method: 'GET',
-            options: {
-              cacheName: 'api-cache',
-              // Reseau degrade (mais pas coupe) : on bascule sur le cache au
-              // bout de 3 s au lieu d'attendre le timeout complet du navigateur.
-              networkTimeoutSeconds: 3,
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24,
-              },
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
-            },
-          },
-          {
-            // Feuilles de style Google Fonts (CORS, reponse 200).
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts-stylesheets',
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365,
-              },
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
-            },
-          },
-          {
-            // Fichiers de police (reponses opaques, d'ou le statut 0).
-            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts-webfonts',
-              expiration: {
-                maxEntries: 30,
-                maxAgeSeconds: 60 * 60 * 24 * 365,
-              },
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
-            },
-          },
-        ],
       },
     }),
   ],

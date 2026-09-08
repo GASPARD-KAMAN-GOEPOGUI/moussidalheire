@@ -89,10 +89,59 @@ model Utilisateur {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  /// Abonnements Web Push de ce compte — un par appareil/navigateur.
+  pushSubscriptions PushSubscription[]
+
   @@index([personneId])
   @@index([actif])
   @@index([supprime, actif])
   @@map("utilisateurs")
+}
+
+/// Abonnement Web Push d'un appareil donné, tel que renvoyé par
+/// `PushManager.subscribe()` côté navigateur.
+///
+/// Un même compte en a autant qu'il utilise d'appareils et de navigateurs :
+/// aucune contrainte d'unicité sur `utilisateurId`, seulement sur `endpoint`.
+model PushSubscription {
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// Identifiant naturel de l'abonnement, attribué par le service push du
+  /// navigateur (FCM, Mozilla, Apple). Unique : un réabonnement du même
+  /// appareil doit mettre à jour la ligne existante, jamais en créer une
+  /// seconde — sans quoi chaque notification partirait en double.
+  ///
+  /// VarChar(500) : les endpoints réels tournent autour de 150-250 caractères
+  /// et la spec ne fixe aucune borne. 500 × 4 octets (utf8mb4) = 2000 octets,
+  /// sous la limite de 3072 octets d'un index InnoDB en row_format DYNAMIC
+  /// (vérifié sur ce serveur). Ne pas confondre avec le plafond de 191
+  /// caractères de `Utilisateur.email` ci-dessus, hérité d'une limite plus
+  /// basse qui ne s'applique pas ici.
+  endpoint String @unique @db.VarChar(500)
+
+  /// Clés de chiffrement du client (RFC 8291), transmises telles quelles à
+  /// web-push. `p256dh` est la clé publique de l'abonné, `auth` le secret
+  /// d'authentification. Toutes deux en base64url.
+  p256dh String @db.VarChar(255)
+  auth   String @db.VarChar(255)
+
+  utilisateurId Int         @map("utilisateur_id")
+  /// Cascade : un compte supprimé physiquement emporte ses abonnements. Sans
+  /// ça, on garderait des endpoints orphelins vers lesquels on continuerait
+  /// d'émettre.
+  utilisateur   Utilisateur @relation(fields: [utilisateurId], references: [id], onDelete: Cascade)
+
+  /// User-Agent au moment de l'abonnement. Sert au diagnostic et à afficher
+  /// « Chrome sur Android » dans une page de gestion des appareils.
+  userAgent String? @map("user_agent") @db.VarChar(500)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// Les envois partent presque toujours d'un utilisateur : « tous les
+  /// abonnements de ce compte » est la requête dominante.
+  @@index([utilisateurId])
+  @@map("push_subscriptions")
 }
 
 enum RoleUtilisateur {
