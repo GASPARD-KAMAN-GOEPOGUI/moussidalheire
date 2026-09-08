@@ -3,6 +3,7 @@ import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { BottomNav } from "./BottomNav";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { OfflineBanner } from "@/components/shared/OfflineBanner";
 
 export function AppShell() {
   return (
@@ -17,6 +18,7 @@ export function AppShell() {
         <Sidebar />
         <div className="flex min-h-screen flex-col lg:pl-64">
           <Header />
+          <OfflineBanner />
           <main
             id="contenu-principal"
             tabIndex={-1}

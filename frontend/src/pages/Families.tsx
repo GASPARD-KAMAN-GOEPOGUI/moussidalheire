@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { DataErrorState } from "@/components/shared/DataErrorState";
 import { RelationLink } from "@/components/people/RelationLink";
 import { AddMyChildDialog } from "@/components/people/AddMyChildDialog";
 import { AddMySpouseDialog } from "@/components/people/AddMySpouseDialog";
@@ -25,7 +26,7 @@ export default function Families() {
   const [addChildOpen, setAddChildOpen] = useState(false);
   const [addSpouseOpen, setAddSpouseOpen] = useState(false);
 
-  const { data, loading, refetch } = useAsync(async () => {
+  const { data, loading, error, refetch } = useAsync(async () => {
     if (!personneUuid) return undefined;
     const [moi, relations] = await Promise.all([getPerson(personneUuid), getPersonRelations(personneUuid)]);
     return moi && relations ? { moi, relations } : undefined;
@@ -50,7 +51,11 @@ export default function Families() {
 
       {loading || !personneUuid ? (
         <Skeleton className="h-64 rounded-xl" />
+      ) : error ? (
+        <DataErrorState error={error} onRetry={refetch} />
       ) : !data ? (
+        // Distinct de l'erreur : la requête a abouti, c'est la fiche liée au
+        // compte qui est introuvable.
         <EmptyState
           icon={UsersRound}
           title="Fiche personnelle introuvable"

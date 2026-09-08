@@ -68,7 +68,9 @@ interface AuthStore {
     nom?: string,
     prenom?: string,
   ) => void;
-  logout: () => void;
+  /** Asynchrone depuis l'ajout du cache API : la purge de `api-cache` doit
+   * avoir abouti avant qu'un autre compte puisse se connecter sur l'appareil. */
+  logout: () => Promise<void>;
   /** Validates the persisted token is still good (GET /auth/moi) — called once
    * by RequireAuth on mount so a stale/expired localStorage token doesn't grant
    * phantom access. Returns false and logs out if the token is no longer valid
@@ -82,6 +84,24 @@ interface AuthStore {
    * and returns false only when the refresh token itself is missing, invalid,
    * expired, or belongs to a now-deactivated account. */
   refreshSession: () => Promise<boolean>;
+}
+
+/**
+ * Vide le cache des réponses API tenu par le Service Worker (règle
+ * `api-cache`, voir vite.config.ts). Sans ça, les fiches consultées par un
+ * membre resteraient lisibles hors ligne par la personne suivante à ouvrir
+ * l'app sur le même appareil — un téléphone se prête.
+ *
+ * Silencieux en cas d'échec : la Cache API n'existe pas partout (Safari en
+ * navigation privée, contexte non sécurisé, ancien navigateur) et une
+ * déconnexion ne doit jamais échouer pour cette raison.
+ */
+async function purgeApiCache(): Promise<void> {
+  try {
+    if ("caches" in window) await caches.delete("api-cache");
+  } catch {
+    // Cache inaccessible : rien à faire de plus, la session est déjà fermée.
+  }
 }
 
 function userFromUtilisateur(utilisateur: AuthUtilisateur, nom?: string, prenom?: string): AuthUser {
@@ -124,9 +144,10 @@ export const useAuthStore = create<AuthStore>()(
         });
       },
 
-      logout: () => {
+      logout: async () => {
         setApiAuthToken(null);
         set({ token: null, refreshToken: null, utilisateur: null, isAuthenticated: false, user: null });
+        await purgeApiCache();
       },
 
       verifySession: async () => {
@@ -154,7 +175,7 @@ export const useAuthStore = create<AuthStore>()(
           return true;
         } catch (err) {
           if (err instanceof ApiError && err.status === 401) {
-            get().logout();
+            await get().logout();
           }
           return false;
         }
@@ -172,7 +193,7 @@ export const useAuthStore = create<AuthStore>()(
           set({ token: res.token, refreshToken: res.refreshToken });
           return true;
         } catch {
-          get().logout();
+          await get().logout();
           return false;
         }
       },

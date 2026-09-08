@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import { GitFork, Home, LogOut, MoreHorizontal, Newspaper, Users } from "lucide-react";
 import {
   Sheet,
@@ -9,6 +9,8 @@ import {
 } from "@/components/ui/sheet";
 import { NAV_ITEMS } from "@/config/nav";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useLogoutFlow } from "@/hooks/useLogoutFlow";
+import { LogoutConfirmDialog } from "@/components/shared/LogoutConfirmDialog";
 import { cn } from "@/lib/utils";
 
 const PRIMARY_ITEMS = [
@@ -25,8 +27,7 @@ const MORE_ITEMS = NAV_ITEMS.filter(
 export function BottomNav() {
   const [moreOpen, setMoreOpen] = useState(false);
   const user = useAuthStore((s) => s.user);
-  const logout = useAuthStore((s) => s.logout);
-  const navigate = useNavigate();
+  const { demanderDeconnexion, executerDeconnexion, confirmOpen, setConfirmOpen } = useLogoutFlow();
 
   const itemClass = ({ isActive }: { isActive: boolean }) =>
     cn(
@@ -109,8 +110,7 @@ export function BottomNav() {
               <button
                 onClick={() => {
                   setMoreOpen(false);
-                  logout();
-                  navigate("/connexion", { replace: true });
+                  demanderDeconnexion();
                 }}
                 aria-label="Se déconnecter"
                 className="flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
@@ -121,6 +121,14 @@ export function BottomNav() {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Hors du Sheet, qui se referme au clic sur « Se déconnecter » et
+          démonterait la modale avec lui. */}
+      <LogoutConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        onConfirm={() => void executerDeconnexion()}
+      />
     </>
   );
 }

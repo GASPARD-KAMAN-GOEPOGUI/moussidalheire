@@ -12,17 +12,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useLogoutFlow } from "@/hooks/useLogoutFlow";
+import { LogoutConfirmDialog } from "@/components/shared/LogoutConfirmDialog";
 
 export function Sidebar() {
   const user = useAuthStore((s) => s.user);
   const utilisateur = useAuthStore((s) => s.utilisateur);
-  const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
-
-  const handleLogout = () => {
-    logout();
-    navigate("/connexion", { replace: true });
-  };
+  const { demanderDeconnexion, executerDeconnexion, confirmOpen, setConfirmOpen } = useLogoutFlow();
 
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:flex">
@@ -84,7 +81,7 @@ export function Sidebar() {
                 </DropdownMenuItem>
               )}
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleLogout}>
+              <DropdownMenuItem onClick={demanderDeconnexion}>
                 <LogOut className="mr-2 size-4" />
                 Se déconnecter
               </DropdownMenuItem>
@@ -92,6 +89,14 @@ export function Sidebar() {
           </DropdownMenu>
         )}
       </div>
+
+      {/* Hors du DropdownMenu : celui-ci se ferme au clic sur l'item, ce qui
+          démonterait la modale avant qu'elle ne s'affiche. */}
+      <LogoutConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        onConfirm={() => void executerDeconnexion()}
+      />
     </aside>
   );
 }

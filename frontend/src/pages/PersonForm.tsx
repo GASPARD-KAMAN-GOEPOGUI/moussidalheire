@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Save, UserPlus } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { DataErrorState } from "@/components/shared/DataErrorState";
 import { Field } from "@/components/shared/FormField";
 import { PhoneInput } from "@/components/shared/PhoneInput";
 import { Button } from "@/components/ui/button";
@@ -111,8 +112,22 @@ function EditForm() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
 
-  const { data: person, loading: personLoading } = useAsync(() => getPerson(id), [id]);
-  const { data: relations, loading: relationsLoading } = useAsync(() => getPersonRelations(id), [id]);
+  const {
+    data: person,
+    loading: personLoading,
+    error: personError,
+    refetch: refetchPerson,
+  } = useAsync(() => getPerson(id), [id]);
+  const {
+    data: relations,
+    loading: relationsLoading,
+    error: relationsError,
+    refetch: refetchRelations,
+  } = useAsync(() => getPersonRelations(id), [id]);
+
+  // La fiche ne peut pas être éditée s'il manque l'une ou l'autre : une seule
+  // erreur suffit à bloquer le formulaire.
+  const loadError = personError ?? relationsError;
 
   const [form, setForm] = useState<PersonInput | null>(null);
   const [pereRef, setPereRef] = useState<PersonRef | null>(null);
@@ -149,11 +164,27 @@ function EditForm() {
   const setGeo = (next: { estAuVillage: boolean; estEnGuinee: boolean }) =>
     setForm((f) => (f ? { ...f, isInVillage: next.estAuVillage, isInGuinea: next.estEnGuinee } : f));
 
-  if (personLoading || relationsLoading || !form) {
+  if (personLoading || relationsLoading) {
     return (
       <div className="mx-auto max-w-3xl space-y-6">
         <Skeleton className="h-10 w-32" />
         <Skeleton className="h-96 rounded-xl" />
+      </div>
+    );
+  }
+
+  // Avant le test `!form` : sur erreur, l'effet qui remplit `form` ne s'exécute
+  // jamais, et la page resterait bloquée sur ses squelettes.
+  if (loadError) {
+    return (
+      <div className="mx-auto max-w-3xl">
+        <DataErrorState
+          error={loadError}
+          onRetry={() => {
+            refetchPerson();
+            refetchRelations();
+          }}
+        />
       </div>
     );
   }
@@ -170,6 +201,17 @@ function EditForm() {
           </Button>
         }
       />
+    );
+  }
+
+  // `form` est rempli par l'effet ci-dessus, un rendu après l'arrivée de
+  // `person`/`relations` : ce passage transitoire garde les squelettes.
+  if (!form) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-6">
+        <Skeleton className="h-10 w-32" />
+        <Skeleton className="h-96 rounded-xl" />
+      </div>
     );
   }
 

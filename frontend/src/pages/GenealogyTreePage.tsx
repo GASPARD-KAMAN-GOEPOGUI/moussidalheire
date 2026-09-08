@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { GitFork, Search, Smartphone, User, Users, X } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { DataErrorState } from "@/components/shared/DataErrorState";
 import { GenealogyTree } from "@/components/tree/GenealogyTree";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -68,7 +69,7 @@ export default function GenealogyTreePage() {
   const [dismissedHint, setDismissedHint] = useState(false);
   const utilisateur = useAuthStore((s) => s.utilisateur);
 
-  const { data: index, loading } = useAsync(() => fetchVillageIndex(), []);
+  const { data: index, loading, error, refetch } = useAsync(() => fetchVillageIndex(), []);
 
   const [mode, setMode] = useState<ViewMode>("village");
   const [selectedPersonId, setSelectedPersonId] = useState<string | undefined>(undefined);
@@ -196,8 +197,10 @@ export default function GenealogyTreePage() {
       )}
 
       <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar">
-        {loading || !index ? (
+        {loading ? (
           <Skeleton className="size-full rounded-xl" />
+        ) : error || !index ? (
+          <DataErrorState error={error ?? new Error("Données indisponibles")} onRetry={refetch} />
         ) : mode === "village" ? (
           <VillageTrees
             visibleEntries={visibleEntries}

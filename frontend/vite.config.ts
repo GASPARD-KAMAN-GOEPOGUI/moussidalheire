@@ -47,6 +47,30 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,jpg,jpeg,webmanifest}'],
         runtimeCaching: [
           {
+            // Callback sur le pathname plutot qu'une regex sur le domaine :
+            // en production nginx sert le front et proxifie /api/v1 sur la
+            // meme origine, alors qu'en dev l'API vit sur le port 5000. Un
+            // motif base sur l'origine casserait dans l'un des deux cas.
+            urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
+            handler: 'NetworkFirst',
+            // GET seulement : rejouer une reponse POST/PATCH/DELETE depuis le
+            // cache ferait croire a une ecriture qui n'a jamais eu lieu.
+            method: 'GET',
+            options: {
+              cacheName: 'api-cache',
+              // Reseau degrade (mais pas coupe) : on bascule sur le cache au
+              // bout de 3 s au lieu d'attendre le timeout complet du navigateur.
+              networkTimeoutSeconds: 3,
+              expiration: {
+                maxEntries: 100,
+                maxAgeSeconds: 60 * 60 * 24,
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+          {
             // Feuilles de style Google Fonts (CORS, reponse 200).
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: 'CacheFirst',

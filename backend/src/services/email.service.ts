@@ -34,10 +34,11 @@ export interface EmailInscriptionComplete extends EmailBienvenue {
  * d'une configuration qui varie par environnement. */
 const NOM_APPLICATION = "Moussidalheire";
 
-/** Page d'accueil du frontend — réutilise `CORS_ORIGIN` (déjà l'origine
- * exacte du frontend, voir env.ts) plutôt que d'introduire une nouvelle
- * variable d'environnement dédiée à l'URL de l'application. */
-const URL_CONNEXION = `${env.CORS_ORIGIN}/connexion`;
+/** Page d'accueil du frontend. Utilise `APP_URL` et non `CORS_ORIGIN` :
+ * ce dernier est devenu une liste d'origines (dev + preview), qu'on ne peut
+ * pas interpoler dans une URL. `APP_URL` retombe sur la première origine
+ * autorisée quand elle n'est pas définie (voir env.ts). */
+const URL_CONNEXION = `${env.APP_URL}/connexion`;
 
 /** Logo officiel — copié depuis `moussidalheire-main/src/assets/logo.jpeg`
  * (identique, jamais redessiné), attaché à chaque e-mail et référencé via

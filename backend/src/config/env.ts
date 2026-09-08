@@ -39,7 +39,31 @@ const envSchema = z.object({
   // genuinely active user is, in practice, never logged out involuntarily.
   JWT_REFRESH_EXPIRES_IN: z.string().min(1).default("30d"),
 
-  CORS_ORIGIN: z.string().min(1).default("http://localhost:5173"),
+  // Liste d'origines séparées par des virgules — le frontend tourne sur 5173
+  // en dev mais sur 4173 en `vite preview`, et les deux doivent pouvoir
+  // appeler l'API. Découpée ici en tableau, la seule forme que `cors()`
+  // accepte pour autoriser plusieurs origines (une chaîne contenant des
+  // virgules serait renvoyée telle quelle dans Access-Control-Allow-Origin,
+  // en-tête invalide qu'aucun navigateur ne ferait correspondre).
+  CORS_ORIGIN: z
+    .string()
+    .min(1)
+    .default("http://localhost:5173")
+    .transform((valeur) =>
+      valeur
+        .split(",")
+        .map((origine) => origine.trim())
+        .filter((origine) => origine.length > 0),
+    )
+    .refine((origines) => origines.length > 0, {
+      message: "CORS_ORIGIN must list at least one origin",
+    }),
+
+  // URL publique du frontend, utilisée pour construire les liens des e-mails
+  // (voir email.service.ts). Distincte de CORS_ORIGIN depuis que celui-ci est
+  // une liste : concaténer un tableau dans une URL donnerait un lien cassé.
+  // Optionnelle — voir le repli appliqué dans le transform ci-dessous.
+  APP_URL: emptyToUndefined(z.string().min(1)),
 
   // SMTP is entirely optional: when unset, email.service.ts logs the message
   // instead of sending it (see that file) rather than failing at startup —
@@ -56,7 +80,14 @@ const envSchema = z.object({
   SMTP_FROM: emptyToUndefined(z.string().min(1)),
 
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
-});
+}).transform((valeurs) => ({
+  ...valeurs,
+  // Repli sur la première origine autorisée quand APP_URL n'est pas définie —
+  // c'est exactement ce que valait CORS_ORIGIN avant qu'il ne devienne une
+  // liste, donc les environnements déjà déployés gardent le comportement
+  // qu'ils avaient sans avoir à ajouter la variable en urgence.
+  APP_URL: valeurs.APP_URL ?? valeurs.CORS_ORIGIN[0],
+}));
 
 type Env = z.infer<typeof envSchema>;
 

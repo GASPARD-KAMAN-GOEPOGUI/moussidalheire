@@ -14,6 +14,7 @@ import { useLocation } from "react-router-dom";
 import { GitFork, Globe2, Home as HomeIcon, MapPinned, Newspaper, UserPlus, Users, UsersRound } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { StatCard } from "@/components/shared/StatCard";
+import { DataErrorState } from "@/components/shared/DataErrorState";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NewsCard } from "@/components/news/NewsCard";
@@ -30,19 +31,54 @@ const RESIDENCE_COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var
 
 export default function Dashboard() {
   const { key } = useLocation();
-  const { data: stats, loading: statsLoading } = useAsync(() => getVillageStats(), [key]);
-  const { data: familyBreakdown } = useAsync(() => getFamilyBreakdown(), [key]);
-  const { data: generationBreakdown } = useAsync(() => getGenerationBreakdown(), [key]);
-  const { data: residenceBreakdown } = useAsync(() => getResidenceBreakdown(), [key]);
-  const { data: news } = useAsync(() => getRecentNews(3), []);
+  const { data: stats, loading: statsLoading, error: statsError, refetch: refetchStats } =
+    useAsync(() => getVillageStats(), [key]);
+  const { data: familyBreakdown, refetch: refetchFamily } = useAsync(() => getFamilyBreakdown(), [key]);
+  const { data: generationBreakdown, refetch: refetchGeneration } = useAsync(
+    () => getGenerationBreakdown(),
+    [key],
+  );
+  const { data: residenceBreakdown, refetch: refetchResidence } = useAsync(
+    () => getResidenceBreakdown(),
+    [key],
+  );
+  const { data: news, refetch: refetchNews } = useAsync(() => getRecentNews(3), []);
+
+  // Les cinq requêtes tombent ensemble quand le réseau lâche : réessayer ne
+  // doit pas ne relancer que les statistiques, sinon les graphiques
+  // resteraient bloqués sur leurs squelettes.
+  function retryAll() {
+    refetchStats();
+    refetchFamily();
+    refetchGeneration();
+    refetchResidence();
+    refetchNews();
+  }
+
+  const header = (
+    <PageHeader
+      eyebrow="Vue d'ensemble"
+      title="Tableau de bord du village"
+      description="Une synthèse en temps réel du recensement, des familles et de la vie du village."
+    />
+  );
+
+  // Une seule erreur pour toute la page : les cinq requêtes visent le même
+  // backend, donc si les statistiques échouent les graphiques et les
+  // actualités ont échoué aussi. Afficher un message unique vaut mieux que de
+  // laisser quatre cartes tourner dans le vide en dessous.
+  if (statsError) {
+    return (
+      <div className="space-y-8">
+        {header}
+        <DataErrorState error={statsError} onRetry={retryAll} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
-      <PageHeader
-        eyebrow="Vue d'ensemble"
-        title="Tableau de bord du village"
-        description="Une synthèse en temps réel du recensement, des familles et de la vie du village."
-      />
+      {header}
 
       {statsLoading || !stats ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

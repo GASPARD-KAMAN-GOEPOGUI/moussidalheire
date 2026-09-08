@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { DataErrorState } from "@/components/shared/DataErrorState";
 import { Pagination } from "@/components/shared/Pagination";
 import { PersonCard } from "@/components/people/PersonCard";
 import { AddMyChildDialog } from "@/components/people/AddMyChildDialog";
@@ -23,7 +24,7 @@ export default function People() {
 
   useEffect(() => setPage(1), [debouncedSearch]);
 
-  const { data, loading, refetch } = useAsync(
+  const { data, loading, error, refetch } = useAsync(
     () => listPeople({ search: debouncedSearch || undefined, page, pageSize: 24 }),
     [debouncedSearch, page],
   );
@@ -71,7 +72,7 @@ export default function People() {
         </div>
       </div>
 
-      {loading || !data ? (
+      {loading ? (
         <div
           className={cn(
             "grid gap-4",
@@ -82,6 +83,11 @@ export default function People() {
             <Skeleton key={i} className={view === "grid" ? "h-64 rounded-xl" : "h-20 rounded-xl"} />
           ))}
         </div>
+      ) : error || !data ? (
+        // `!data` sans erreur ne devrait pas arriver (useAsync remplit l'un ou
+        // l'autre), mais le traiter ici évite de retomber sur des squelettes
+        // qui tourneraient indéfiniment si le cas se présentait.
+        <DataErrorState error={error ?? new Error("Données indisponibles")} onRetry={refetch} />
       ) : data.items.length === 0 ? (
         <EmptyState
           icon={SearchX}

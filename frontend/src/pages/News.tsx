@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { DataErrorState } from "@/components/shared/DataErrorState";
 import { Pagination } from "@/components/shared/Pagination";
 import { NewsCard } from "@/components/news/NewsCard";
 import { AddNewsDialog } from "@/components/news/AddNewsDialog";
@@ -39,7 +40,7 @@ export default function News() {
   }
   useEffect(refetchCategories, []);
 
-  const { data, loading, refetch } = useAsync(
+  const { data, loading, error, refetch } = useAsync(
     () =>
       listNews({
         search: debounced || undefined,
@@ -84,15 +85,19 @@ export default function News() {
         }}
       />
 
+      {/* Sur téléphone, les deux contrôles passent en pleine largeur pour avoir
+          exactement la même taille une fois empilés. À partir de `sm`, on
+          retrouve la ligne unique : le champ occupe la place restante à côté
+          du sélecteur de 14rem. */}
       <div className="flex flex-wrap items-center gap-2">
         <Input
           placeholder="Rechercher une actualité…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="min-w-[200px] flex-1"
+          className="w-full sm:w-auto sm:min-w-[200px] sm:flex-1"
         />
         <Select value={category} onValueChange={setCategory}>
-          <SelectTrigger className="w-56 shrink-0">
+          <SelectTrigger className="w-full sm:w-56 sm:shrink-0">
             <SelectValue placeholder="Catégorie" />
           </SelectTrigger>
           <SelectContent>
@@ -106,12 +111,14 @@ export default function News() {
         </Select>
       </div>
 
-      {loading || !data ? (
+      {loading ? (
         <div className={cn("grid gap-4 sm:grid-cols-2 lg:grid-cols-3")}>
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-72 rounded-xl" />
           ))}
         </div>
+      ) : error || !data ? (
+        <DataErrorState error={error ?? new Error("Données indisponibles")} onRetry={refetch} />
       ) : data.items.length === 0 ? (
         <EmptyState
           icon={Newspaper}

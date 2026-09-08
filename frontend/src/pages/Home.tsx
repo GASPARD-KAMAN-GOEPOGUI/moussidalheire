@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatCard } from "@/components/shared/StatCard";
 import { SectionHeading } from "@/components/shared/SectionHeading";
+import { DataErrorState } from "@/components/shared/DataErrorState";
 import { NewsCard } from "@/components/news/NewsCard";
 import { useAsync } from "@/hooks/useAsync";
 import { getVillageStats, getRecentNews } from "@/services/api";
@@ -12,8 +13,21 @@ import villageImg from "@/assets/imageVillage.jpeg";
 
 export default function Home() {
   const { key } = useLocation();
-  const { data: stats, loading: statsLoading } = useAsync(() => getVillageStats(), [key]);
-  const { data: news, loading: newsLoading } = useAsync(() => getRecentNews(3), []);
+  // Deux sections indépendantes : si les chiffres tombent, les actualités
+  // peuvent très bien s'afficher (et l'inverse). Chacune porte donc son propre
+  // état d'erreur plutôt qu'un message unique pour toute la page d'accueil.
+  const {
+    data: stats,
+    loading: statsLoading,
+    error: statsError,
+    refetch: refetchStats,
+  } = useAsync(() => getVillageStats(), [key]);
+  const {
+    data: news,
+    loading: newsLoading,
+    error: newsError,
+    refetch: refetchNews,
+  } = useAsync(() => getRecentNews(3), []);
 
   return (
     <div className="space-y-14">
@@ -57,12 +71,14 @@ export default function Home() {
       {/* Stats */}
       <section className="space-y-5">
         <SectionHeading title="Le village en quelques chiffres" viewAllHref="/dashboard" viewAllLabel="Tableau de bord complet" />
-        {statsLoading || !stats ? (
+        {statsLoading ? (
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} className="h-28 rounded-xl" />
             ))}
           </div>
+        ) : statsError || !stats ? (
+          <DataErrorState error={statsError ?? new Error("Données indisponibles")} onRetry={refetchStats} />
         ) : (
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <StatCard icon={Users} label="Habitants recensés" value={stats.totalPopulation} accent="primary" />
@@ -102,12 +118,14 @@ export default function Home() {
       {/* News preview */}
       <section className="space-y-5">
         <SectionHeading title="Actualités récentes du village" viewAllHref="/actualites" />
-        {newsLoading || !news ? (
+        {newsLoading ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             {Array.from({ length: 3 }).map((_, i) => (
               <Skeleton key={i} className="h-64 rounded-xl" />
             ))}
           </div>
+        ) : newsError || !news ? (
+          <DataErrorState error={newsError ?? new Error("Données indisponibles")} onRetry={refetchNews} />
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             {news.map((n) => (
