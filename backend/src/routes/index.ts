@@ -11,6 +11,7 @@ import { actualiteRouter } from "@/routes/actualite.routes";
 import { brancheRouter } from "@/routes/branche.routes";
 import { categorieActualiteRouter } from "@/routes/categorie-actualite.routes";
 import { uploadRouter } from "@/routes/upload.routes";
+import { pushRouter } from "@/routes/push.routes";
 
 /**
  * All API routes are versioned under /api/v1 (mounted in app.ts).
@@ -37,3 +38,4 @@ v1Router.use("/actualites", actualiteRouter);
 v1Router.use("/branches", brancheRouter);
 v1Router.use("/categories-actualites", categorieActualiteRouter);
 v1Router.use("/uploads", uploadRouter);
+v1Router.use("/push", pushRouter);
