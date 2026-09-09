@@ -77,6 +77,29 @@ function consommerEvenementDiffere(): void {
   diffuser();
 }
 
+/**
+ * Le bouton de l'en-tête et la modale ne vivent plus au même endroit : la
+ * modale est montée à la racine de l'application (pour exister avant
+ * authentification), le bouton reste dans l'en-tête. Ce petit canal les relie
+ * sans les faire dépendre l'un de l'autre.
+ */
+const ouvreurs = new Set<() => void>();
+
+/** Appelé par le bouton de l'en-tête. */
+export function demanderOuvertureInstallation(): void {
+  for (const ouvrir of ouvreurs) ouvrir();
+}
+
+/** Abonne la modale aux demandes d'ouverture manuelle. */
+export function useOuvertureInstallation(ouvrir: () => void): void {
+  useEffect(() => {
+    ouvreurs.add(ouvrir);
+    return () => {
+      ouvreurs.delete(ouvrir);
+    };
+  }, [ouvrir]);
+}
+
 export function useInstallPrompt() {
   // Valeur initiale lue depuis la capture du module : l'événement a
   // probablement déjà été émis quand ce hook se monte.

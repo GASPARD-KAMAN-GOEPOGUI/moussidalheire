@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { Download, EllipsisVertical, Plus, Share, Smartphone, WifiOff, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,7 +9,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useInstallPrompt } from "@/hooks/useInstallPrompt";
+import {
+  demanderOuvertureInstallation,
+  useInstallPrompt,
+  useOuvertureInstallation,
+} from "@/hooks/useInstallPrompt";
 import logo from "@/assets/logo.jpeg";
 
 const BENEFITS = [
@@ -29,36 +34,75 @@ const BENEFITS = [
   },
 ];
 
-/** Laisse la page d'accueil se dessiner avant de recouvrir l'écran : ouvrir la
- * modale immédiatement après la redirection la ferait apparaître sur un écran
- * encore vide. */
+/** Laisse la page se dessiner avant de recouvrir l'écran : ouvrir la modale
+ * immédiatement la ferait apparaître sur un écran encore vide. */
 const DELAI_OUVERTURE_MS = 1500;
 
+/** L'écran de connexion joue une séquence d'animation (formulaire à 0,9 s,
+ * séparation à 1,85 s, machine à écrire à 3,05 s — voir Login.tsx). On attend
+ * qu'elle se termine plutôt que de la recouvrir en plein milieu. */
+const DELAI_OUVERTURE_CONNEXION_MS = 4000;
+
 /**
- * Bouton d'installation de la PWA + sa modale explicative.
- *
- * La modale s'ouvre d'elle-même après une connexion réussie, et reste
- * accessible à tout moment par le bouton de l'en-tête. Elle s'affiche sur tous
- * les navigateurs, avec un contenu adapté au chemin d'installation réellement
- * disponible — seule l'application déjà installée la fait disparaître.
+ * Bouton d'accès manuel, dans l'en-tête. Séparé de la modale, qui est montée à
+ * la racine de l'application pour exister avant authentification — voir
+ * `InstallPromptDialog`.
  */
-export function InstallPrompt() {
+export function InstallButton() {
+  const { isInstalled } = useInstallPrompt();
+  if (isInstalled) return null;
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={demanderOuvertureInstallation}
+      aria-label="Installer l'application"
+    >
+      <Download aria-hidden="true" />
+    </Button>
+  );
+}
+
+/**
+ * Modale de proposition d'installation.
+ *
+ * Montée à la racine de l'application, hors des routes : elle doit exister
+ * dès le lancement du site, y compris sur l'écran de connexion, avant toute
+ * authentification. Elle ne bloque rien — l'utilisateur installe puis se
+ * connecte, ou ferme et se connecte.
+ *
+ * Restant montée pendant que l'utilisateur s'authentifie, elle ne se rouvre
+ * pas après la connexion : une seule apparition par chargement du site.
+ *
+ * Elle s'affiche sur tous les navigateurs, avec un contenu adapté au chemin
+ * d'installation réellement disponible — seule l'application déjà installée
+ * la fait disparaître.
+ */
+export function InstallPromptDialog() {
   const { isInstalled, canPrompt, modeInstallation, promptInstall } = useInstallPrompt();
   const [open, setOpen] = useState(false);
+  const { pathname } = useLocation();
 
-  // Ouverture automatique à chaque ouverture de l'application, tant qu'elle
-  // n'est pas installée sur CET appareil. Aucun refus n'est mémorisé : c'est
-  // le comportement demandé.
+  // Ouverture manuelle, demandée par le bouton de l'en-tête.
+  const ouvrir = useCallback(() => setOpen(true), []);
+  useOuvertureInstallation(ouvrir);
+
+  // Ouverture automatique à chaque chargement du site, tant que l'application
+  // n'est pas installée sur CET appareil. Aucun refus n'est mémorisé.
   //
-  // Le déclencheur est le montage de ce composant, qui vit dans l'en-tête,
-  // donc dans `AppShell` : il n'existe pas sur /connexion (aucune modale avant
-  // authentification) et ne se remonte pas d'une page à l'autre, `AppShell`
-  // restant en place autour de l'`Outlet`. La modale s'ouvre donc une fois par
-  // chargement de l'application, pas à chaque navigation.
+  // Le délai est décidé au montage, d'après la page d'entrée : plus long sur
+  // l'écran de connexion, dont l'animation d'ouverture ne doit pas être
+  // recouverte. Les dépendances excluent volontairement `pathname` — une
+  // navigation ultérieure ne doit pas relancer le minuteur.
   useEffect(() => {
     if (isInstalled) return;
-    const minuteur = setTimeout(() => setOpen(true), DELAI_OUVERTURE_MS);
+    const delai = pathname.startsWith("/connexion")
+      ? DELAI_OUVERTURE_CONNEXION_MS
+      : DELAI_OUVERTURE_MS;
+    const minuteur = setTimeout(() => setOpen(true), delai);
     return () => clearTimeout(minuteur);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isInstalled]);
 
   // Une installation aboutie referme la modale et la retire définitivement.
@@ -82,17 +126,7 @@ export function InstallPrompt() {
   }
 
   return (
-    <>
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => setOpen(true)}
-        aria-label="Installer l'application"
-      >
-        <Download aria-hidden="true" />
-      </Button>
-
-      <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <div className="flex items-center gap-3">
@@ -177,8 +211,7 @@ export function InstallPrompt() {
               </Button>
             )}
           </div>
-        </DialogContent>
-      </Dialog>
-    </>
+      </DialogContent>
+    </Dialog>
   );
 }

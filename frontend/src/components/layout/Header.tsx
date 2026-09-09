@@ -12,7 +12,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { PersonAvatar } from "@/components/people/PersonAvatar";
-import { InstallPrompt } from "@/components/InstallPrompt";
+import { InstallButton } from "@/components/InstallPrompt";
 import { NotificationsPrompt } from "@/components/shared/NotificationsPrompt";
 import { useTheme } from "@/hooks/useTheme";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -162,7 +162,7 @@ export function Header() {
 
       <NotificationsPrompt />
 
-      <InstallPrompt />
+      <InstallButton />
 
       <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label={theme === "dark" ? "Activer le thème clair" : "Activer le thème sombre"}>
         {theme === "dark" ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}

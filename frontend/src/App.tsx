@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import { PageLoader } from "@/components/shared/PageLoader";
 import { RequireAuth } from "@/components/auth/RequireAuth";
+import { InstallPromptDialog } from "@/components/InstallPrompt";
 
 const Login = lazy(() => import("@/pages/Login"));
 const Home = lazy(() => import("@/pages/Home"));
@@ -19,6 +20,10 @@ const NotFound = lazy(() => import("@/pages/NotFound"));
 function App() {
   return (
     <BrowserRouter>
+      {/* Hors des routes, et hors du Suspense : la proposition d'installation
+          doit exister dès le lancement du site, avant authentification, et ne
+          pas dépendre du chargement paresseux de la page affichée. */}
+      <InstallPromptDialog />
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="connexion" element={<Login />} />
