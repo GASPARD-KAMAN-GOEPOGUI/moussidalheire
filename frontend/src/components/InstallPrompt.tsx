@@ -8,7 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { consommerConnexionRecente, useInstallPrompt } from "@/hooks/useInstallPrompt";
+import { useInstallPrompt } from "@/hooks/useInstallPrompt";
 import logo from "@/assets/logo.jpeg";
 
 const BENEFITS = [
@@ -46,17 +46,17 @@ export function InstallPrompt() {
   const { isInstalled, canPrompt, modeInstallation, promptInstall } = useInstallPrompt();
   const [open, setOpen] = useState(false);
 
-  // Ouverture automatique à chaque connexion tant que l'application n'est pas
-  // installée sur CET appareil — aucun refus n'est mémorisé, c'est voulu.
+  // Ouverture automatique à chaque ouverture de l'application, tant qu'elle
+  // n'est pas installée sur CET appareil. Aucun refus n'est mémorisé : c'est
+  // le comportement demandé.
   //
-  // Ce composant n'est monté qu'une fois la redirection faite : le marqueur
-  // posé au moment de la connexion est donc lu ici, au montage. Il est
-  // consommé au passage, sans quoi un simple changement de page rouvrirait la
-  // modale, l'en-tête se remontant à chaque navigation.
+  // Le déclencheur est le montage de ce composant, qui vit dans l'en-tête,
+  // donc dans `AppShell` : il n'existe pas sur /connexion (aucune modale avant
+  // authentification) et ne se remonte pas d'une page à l'autre, `AppShell`
+  // restant en place autour de l'`Outlet`. La modale s'ouvre donc une fois par
+  // chargement de l'application, pas à chaque navigation.
   useEffect(() => {
     if (isInstalled) return;
-    if (!consommerConnexionRecente()) return;
-
     const minuteur = setTimeout(() => setOpen(true), DELAI_OUVERTURE_MS);
     return () => clearTimeout(minuteur);
   }, [isInstalled]);
@@ -75,9 +75,8 @@ export function InstallPrompt() {
     setOpen(false);
   }
 
-  /** « Continuer » : ferme simplement. Aucun refus n'est mémorisé — la modale
-   * se represente à la prochaine connexion tant que l'application n'est pas
-   * installée sur cet appareil. */
+  /** Fermeture sans installer. Rien n'est mémorisé : la modale se represente
+   * au prochain lancement tant que l'application n'est pas installée. */
   function handleContinuer() {
     setOpen(false);
   }

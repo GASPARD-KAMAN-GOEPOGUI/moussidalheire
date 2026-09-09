@@ -2,7 +2,6 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { apiRequest, ApiError, setApiAuthToken, setRefreshHandler } from "@/lib/api-client";
 import { onDataChanged } from "@/lib/sync-bus";
-import { marquerConnexionRecente } from "@/hooks/useInstallPrompt";
 import { getPerson } from "@/services/api/people";
 
 export interface AuthUtilisateur {
@@ -105,19 +104,6 @@ async function purgeApiCache(): Promise<void> {
   }
 }
 
-/**
- * Signale une connexion qui vient d'aboutir, pour que `InstallPrompt` propose
- * l'installation une fois la redirection faite.
- *
- * Posé ici plutôt que dans chaque écran : on se connecte depuis `Login`, mais
- * aussi depuis `NewMemberDialog` (auto-connexion après inscription), et ce
- * point unique couvre les deux.
- */
-function signalerConnexion(): void {
-  if (typeof window === "undefined") return;
-  marquerConnexionRecente();
-}
-
 function userFromUtilisateur(utilisateur: AuthUtilisateur, nom?: string, prenom?: string): AuthUser {
   const name = prenom && nom ? `${prenom} ${nom}` : utilisateur.identifiant;
   return { name, email: utilisateur.email ?? utilisateur.identifiant };
@@ -145,7 +131,6 @@ export const useAuthStore = create<AuthStore>()(
           isAuthenticated: true,
           user: userFromUtilisateur(res.utilisateur),
         });
-        signalerConnexion();
       },
 
       loginWithToken: (token, refreshToken, utilisateur, nom, prenom) => {
@@ -157,7 +142,6 @@ export const useAuthStore = create<AuthStore>()(
           isAuthenticated: true,
           user: userFromUtilisateur(utilisateur, nom, prenom),
         });
-        signalerConnexion();
       },
 
       logout: async () => {

@@ -23,41 +23,6 @@ export type InstallOutcome = "accepted" | "dismissed" | "unavailable";
 export type ModeInstallation = "invite" | "ios" | "manuel";
 
 /**
- * Marqueur posé par `useAuthStore` après une connexion réussie, et consommé au
- * montage de `InstallPrompt`.
- *
- * Un simple événement `window` ne conviendrait pas : `InstallPrompt` vit dans
- * l'en-tête, donc dans `AppShell`, qui n'est monté que pour les routes
- * authentifiées. Au moment où la connexion aboutit, l'utilisateur est encore
- * sur /connexion — le composant n'existe pas et n'écoute rien. Le marqueur,
- * lui, survit à la redirection.
- *
- * `sessionStorage` et non `localStorage` : il doit disparaître à la fermeture
- * de l'onglet, pour ne pas rouvrir la modale à un simple rechargement.
- */
-const CLE_CONNEXION_RECENTE = "moussidalheire-connexion-recente";
-
-export function marquerConnexionRecente(): void {
-  try {
-    sessionStorage.setItem(CLE_CONNEXION_RECENTE, "1");
-  } catch {
-    // Sans stockage de session, l'ouverture automatique ne se fera pas. Le
-    // bouton de l'en-tête reste le chemin manuel.
-  }
-}
-
-/** Lit le marqueur ET le retire : la modale ne doit s'ouvrir qu'une fois. */
-export function consommerConnexionRecente(): boolean {
-  try {
-    const present = sessionStorage.getItem(CLE_CONNEXION_RECENTE) !== null;
-    if (present) sessionStorage.removeItem(CLE_CONNEXION_RECENTE);
-    return present;
-  } catch {
-    return false;
-  }
-}
-
-/**
  * Safari iOS n'expose ni `beforeinstallprompt` ni la moindre API
  * d'installation : le seul chemin est manuel (Partager > Sur l'écran
  * d'accueil). D'où le reniflage d'user agent, faute d'alternative fiable —
