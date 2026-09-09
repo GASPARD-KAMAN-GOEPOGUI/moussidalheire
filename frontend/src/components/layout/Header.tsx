@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/command";
 import { PersonAvatar } from "@/components/people/PersonAvatar";
 import { InstallPrompt } from "@/components/InstallPrompt";
+import { NotificationsPrompt } from "@/components/shared/NotificationsPrompt";
 import { useTheme } from "@/hooks/useTheme";
 import { useDebounce } from "@/hooks/useDebounce";
 import { globalSearch, type GlobalSearchResults } from "@/services/api/search";
@@ -158,6 +159,8 @@ export function Header() {
           </Command>
         </PopoverContent>
       </Popover>
+
+      <NotificationsPrompt />
 
       <InstallPrompt />
 
