@@ -14,6 +14,50 @@ export interface BeforeInstallPromptEvent extends Event {
 export type InstallOutcome = "accepted" | "dismissed" | "unavailable";
 
 /**
+ * Comment cet appareil peut installer l'application :
+ * - `invite`  : le navigateur fournit une invite native (Chrome, Edge).
+ * - `ios`     : Safari iOS, où seul le geste Partager > Sur l'écran d'accueil existe.
+ * - `manuel`  : tout le reste (Firefox…), où l'installation passe par le menu
+ *               du navigateur, sans API pour la déclencher.
+ */
+export type ModeInstallation = "invite" | "ios" | "manuel";
+
+/**
+ * Marqueur posé par `useAuthStore` après une connexion réussie, et consommé au
+ * montage de `InstallPrompt`.
+ *
+ * Un simple événement `window` ne conviendrait pas : `InstallPrompt` vit dans
+ * l'en-tête, donc dans `AppShell`, qui n'est monté que pour les routes
+ * authentifiées. Au moment où la connexion aboutit, l'utilisateur est encore
+ * sur /connexion — le composant n'existe pas et n'écoute rien. Le marqueur,
+ * lui, survit à la redirection.
+ *
+ * `sessionStorage` et non `localStorage` : il doit disparaître à la fermeture
+ * de l'onglet, pour ne pas rouvrir la modale à un simple rechargement.
+ */
+const CLE_CONNEXION_RECENTE = "moussidalheire-connexion-recente";
+
+export function marquerConnexionRecente(): void {
+  try {
+    sessionStorage.setItem(CLE_CONNEXION_RECENTE, "1");
+  } catch {
+    // Sans stockage de session, l'ouverture automatique ne se fera pas. Le
+    // bouton de l'en-tête reste le chemin manuel.
+  }
+}
+
+/** Lit le marqueur ET le retire : la modale ne doit s'ouvrir qu'une fois. */
+export function consommerConnexionRecente(): boolean {
+  try {
+    const present = sessionStorage.getItem(CLE_CONNEXION_RECENTE) !== null;
+    if (present) sessionStorage.removeItem(CLE_CONNEXION_RECENTE);
+    return present;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Safari iOS n'expose ni `beforeinstallprompt` ni la moindre API
  * d'installation : le seul chemin est manuel (Partager > Sur l'écran
  * d'accueil). D'où le reniflage d'user agent, faute d'alternative fiable —
@@ -26,8 +70,54 @@ function detectIOS(): boolean {
   return /iPad|iPhone|iPod/.test(navigator.userAgent) && !("MSStream" in window);
 }
 
+/**
+ * Capture de `beforeinstallprompt` au niveau du MODULE, et non dans le hook.
+ *
+ * Chrome émet cet événement au chargement de la page, dès que ses critères
+ * d'installabilité sont réunis — c'est-à-dire pendant que l'utilisateur est
+ * encore sur /connexion. Or `InstallPrompt` vit dans l'en-tête, qui n'est
+ * monté qu'après authentification : un écouteur posé dans le hook arriverait
+ * trop tard et l'événement serait perdu. Chrome se comporterait alors comme
+ * un navigateur sans API d'installation.
+ *
+ * Ce module est chargé tôt (useAuthStore l'importe), donc l'écouteur est en
+ * place bien avant que l'événement ne parte. Les hooks montés plus tard lisent
+ * la valeur déjà capturée.
+ */
+let evenementDiffere: BeforeInstallPromptEvent | null = null;
+const abonnes = new Set<(evenement: BeforeInstallPromptEvent | null) => void>();
+
+function diffuser(): void {
+  for (const abonne of abonnes) abonne(evenementDiffere);
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeinstallprompt", (event) => {
+    // Sans preventDefault, Chrome affiche sa propre infobar et l'événement
+    // n'est plus réutilisable pour déclencher l'invite au moment voulu.
+    event.preventDefault();
+    evenementDiffere = event as BeforeInstallPromptEvent;
+    diffuser();
+  });
+
+  window.addEventListener("appinstalled", () => {
+    evenementDiffere = null;
+    diffuser();
+  });
+}
+
+/** Vide l'événement après usage : il ne se consomme qu'une fois. */
+function consommerEvenementDiffere(): void {
+  evenementDiffere = null;
+  diffuser();
+}
+
 export function useInstallPrompt() {
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  // Valeur initiale lue depuis la capture du module : l'événement a
+  // probablement déjà été émis quand ce hook se monte.
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(
+    () => evenementDiffere,
+  );
   const [justInstalled, setJustInstalled] = useState(false);
   const [isIOS] = useState(detectIOS);
 
@@ -39,25 +129,22 @@ export function useInstallPrompt() {
     typeof navigator !== "undefined" &&
     (navigator as Navigator & { standalone?: boolean }).standalone === true;
 
+  // S'abonne à la capture du module plutôt qu'à `window` directement : les
+  // événements arrivés avant le montage sont ainsi déjà pris en compte.
   useEffect(() => {
-    function onBeforeInstallPrompt(event: Event) {
-      // Sans preventDefault, Chrome affiche sa propre infobar et l'événement
-      // n'est plus réutilisable pour déclencher l'invite au moment voulu.
-      event.preventDefault();
-      setDeferredPrompt(event as BeforeInstallPromptEvent);
-    }
-
-    function onAppInstalled() {
-      setJustInstalled(true);
-      setDeferredPrompt(null);
-    }
-
-    window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
-    window.addEventListener("appinstalled", onAppInstalled);
+    const abonne = (evenement: BeforeInstallPromptEvent | null) => setDeferredPrompt(evenement);
+    abonnes.add(abonne);
     return () => {
-      window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
-      window.removeEventListener("appinstalled", onAppInstalled);
+      abonnes.delete(abonne);
     };
+  }, []);
+
+  // `appinstalled` reste écouté ici : il n'affecte pas l'événement différé
+  // mais l'état « installée » propre à ce composant.
+  useEffect(() => {
+    const onAppInstalled = () => setJustInstalled(true);
+    window.addEventListener("appinstalled", onAppInstalled);
+    return () => window.removeEventListener("appinstalled", onAppInstalled);
   }, []);
 
   const isInstalled = standalone || iosStandalone || justInstalled;
@@ -71,17 +158,21 @@ export function useInstallPrompt() {
     // Un événement `beforeinstallprompt` ne se consomme qu'une fois : appeler
     // prompt() dessus une seconde fois lève une erreur. Si l'utilisateur a
     // refusé, Chrome en réémettra un nouveau quand il redeviendra éligible.
-    setDeferredPrompt(null);
+    // Vidé au niveau du module, pour que tous les abonnés soient à jour.
+    consommerEvenementDiffere();
     return outcome;
   }, [deferredPrompt]);
+
+  const modeInstallation: ModeInstallation =
+    deferredPrompt !== null ? "invite" : isIOS ? "ios" : "manuel";
 
   return {
     /** Chrome/Edge/Android : l'invite native est prête à être déclenchée. */
     canPrompt: deferredPrompt !== null,
     isIOS,
     isInstalled,
-    /** Y a-t-il quelque chose à proposer à l'utilisateur ? */
-    canInstall: !isInstalled && (deferredPrompt !== null || isIOS),
+    /** Quel chemin d'installation proposer sur cet appareil. */
+    modeInstallation,
     promptInstall,
   };
 }
