@@ -14,9 +14,19 @@ export function AppShell() {
       >
         Aller au contenu principal
       </a>
-      <div className="min-h-screen bg-background">
+      {/* Le défilement se fait dans le conteneur interne ci-dessous, pas dans
+          le document. C'est le seul moyen de masquer l'indicateur de
+          défilement sur mobile : Chromium dessine celui du défilement RACINE
+          comme une surcouche du compositeur, hors de portée de toute CSS,
+          alors qu'un conteneur interne obéit à `.no-scrollbar` (vérifié sur
+          Samsung Internet).
+
+          Contrepartie assumée : la barre d'adresse du navigateur ne se
+          rétracte plus au défilement, ce comportement natif étant réservé au
+          défilement racine. */}
+      <div className="h-[100dvh] overflow-hidden bg-background">
         <Sidebar />
-        <div className="flex min-h-screen flex-col lg:pl-64">
+        <div className="flex h-full flex-col overflow-y-auto no-scrollbar lg:pl-64">
           <Header />
           <OfflineBanner />
           <main
