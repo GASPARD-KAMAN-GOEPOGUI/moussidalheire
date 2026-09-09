@@ -39,6 +39,17 @@ export function upsert(donnees: DonneesAbonnement): Promise<PushSubscription> {
   });
 }
 
+/**
+ * Tous les abonnements, tous comptes confondus — pour une diffusion générale
+ * (publication d'une actualité). À l'échelle du village, le nombre de lignes
+ * se compte en dizaines : les charger d'un coup est sans conséquence. Si la
+ * population d'abonnés devenait importante, il faudrait paginer et envoyer par
+ * lots plutôt que de tout garder en mémoire.
+ */
+export function listerTous(): Promise<PushSubscription[]> {
+  return prisma.pushSubscription.findMany({ orderBy: { createdAt: "desc" } });
+}
+
 export function listerParUtilisateur(utilisateurId: number): Promise<PushSubscription[]> {
   return prisma.pushSubscription.findMany({
     where: { utilisateurId },

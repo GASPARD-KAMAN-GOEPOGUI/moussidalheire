@@ -8,6 +8,7 @@ import type {
   ListActualiteQuery,
   UpdateActualiteInput,
 } from "@/validators/actualite.validator";
+import * as pushService from "@/services/push.service";
 import { AppError } from "@/utils/app-error";
 import { buildPaginationMeta, toSkipTake, type PaginationMeta } from "@/utils/pagination";
 
@@ -107,7 +108,20 @@ export async function obtenirParUuid(uuid: string): Promise<ActualiteAvecUuids> 
 export async function creer(input: CreateActualiteInput): Promise<ActualiteAvecUuids> {
   await verifierCategorieExiste(input.categorieId);
   const actualite = await actualiteRepository.create(input as Prisma.ActualiteUncheckedCreateInput);
-  return enrichirUneAvecUuids(actualite);
+  const enrichie = await enrichirUneAvecUuids(actualite);
+
+  // Diffusion à tous les abonnés. Volontairement NON attendue : la réponse
+  // HTTP ne doit pas dépendre de la disponibilité des services push de Google
+  // ou Mozilla — un envoi lent ferait traîner la publication, un envoi en
+  // échec ne doit jamais la faire échouer. `envoyerATous` ne rejette jamais
+  // (voir push.service.ts) et journalise son propre bilan, d'où le `void`.
+  void pushService.envoyerATous({
+    titre: "Nouvelle actualité au village",
+    corps: actualite.titre,
+    url: `/actualites/${actualite.uuid}`,
+  });
+
+  return enrichie;
 }
 
 export async function modifier(

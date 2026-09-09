@@ -64,13 +64,18 @@ export async function supprimerAbonnement(
  * exemple). Les échecs sont journalisés, et les abonnements morts purgés au
  * passage — sans quoi la table accumulerait des endpoints fantômes.
  */
-export async function envoyerAUtilisateur(
-  utilisateurId: number,
-  contenu: ContenuNotification,
-): Promise<{ envoyes: number; echecs: number; purges: number }> {
-  const abonnements = await pushRepository.listerParUtilisateur(utilisateurId);
-  const charge = JSON.stringify(contenu);
+export interface BilanEnvoi {
+  envoyes: number;
+  echecs: number;
+  purges: number;
+}
 
+/** Envoi effectif vers une liste d'abonnements, avec purge des morts. */
+async function envoyerVers(
+  abonnements: { endpoint: string; p256dh: string; auth: string }[],
+  contenu: ContenuNotification,
+): Promise<BilanEnvoi> {
+  const charge = JSON.stringify(contenu);
   let envoyes = 0;
   let echecs = 0;
   let purges = 0;
@@ -94,7 +99,7 @@ export async function envoyerAUtilisateur(
           return;
         }
         logger.warn(
-          { err: error, utilisateurId, endpoint: abonnement.endpoint.slice(0, 60) },
+          { err: error, endpoint: abonnement.endpoint.slice(0, 60) },
           "Échec d'envoi d'une notification push",
         );
       }
@@ -102,4 +107,29 @@ export async function envoyerAUtilisateur(
   );
 
   return { envoyes, echecs, purges };
+}
+
+export async function envoyerAUtilisateur(
+  utilisateurId: number,
+  contenu: ContenuNotification,
+): Promise<BilanEnvoi> {
+  return envoyerVers(await pushRepository.listerParUtilisateur(utilisateurId), contenu);
+}
+
+/**
+ * Diffusion à tous les appareils abonnés, sans distinction de compte — c'est
+ * le choix retenu pour les actualités : tout membre abonné reçoit tout.
+ *
+ * L'auteur de la publication est inclus : il est abonné comme les autres, et
+ * l'exclure demanderait de propager son identité jusqu'ici pour un bénéfice
+ * discutable (il verra simplement sa propre annonce arriver).
+ */
+export async function envoyerATous(contenu: ContenuNotification): Promise<BilanEnvoi> {
+  const abonnements = await pushRepository.listerTous();
+  const bilan = await envoyerVers(abonnements, contenu);
+  logger.info(
+    { titre: contenu.titre, abonnements: abonnements.length, ...bilan },
+    "Diffusion push terminée",
+  );
+  return bilan;
 }
