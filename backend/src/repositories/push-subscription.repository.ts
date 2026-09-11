@@ -69,8 +69,9 @@ export async function supprimerPourUtilisateur(
   return count;
 }
 
-/** Purge d'un abonnement que le service push a déclaré mort (404/410) — sans
- * condition de propriétaire : l'endpoint n'existe plus nulle part. */
+/** Purge d'un abonnement que le service push a déclaré inutilisable
+ * (401/403/404/410, voir push.service.ts) — sans condition de propriétaire :
+ * l'endpoint ne peut plus rien recevoir de ce serveur. */
 export async function supprimerParEndpoint(endpoint: string): Promise<void> {
   await prisma.pushSubscription.deleteMany({ where: { endpoint } });
 }

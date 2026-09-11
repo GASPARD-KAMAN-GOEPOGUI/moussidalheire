@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { createECDH } from "node:crypto";
 import { z } from "zod";
 
 /**
@@ -21,6 +22,26 @@ function emptyToUndefined<T extends z.ZodTypeAny>(schema: T) {
 function longueurBase64Url(valeur: string): number {
   if (!/^[A-Za-z0-9_-]+$/.test(valeur)) return -1;
   return Buffer.from(valeur, "base64url").length;
+}
+
+/**
+ * Vrai si la clé publique VAPID est bien celle qui dérive de la clé privée.
+ *
+ * Deux clés de bonne longueur ne forment pas forcément une paire : il suffit
+ * de ne remplacer qu'une des deux lignes du `.env` lors d'une rotation. Le
+ * serveur démarrerait alors normalement, mais chaque envoi serait refusé
+ * (401/403) — et push.service.ts purgerait TOUS les abonnements.
+ */
+export function paireVapidCoherente(clePublique: string, clePrivee: string): boolean {
+  try {
+    const ecdh = createECDH("prime256v1");
+    ecdh.setPrivateKey(Buffer.from(clePrivee, "base64url"));
+    return ecdh.getPublicKey().equals(Buffer.from(clePublique, "base64url"));
+  } catch {
+    // `setPrivateKey` rejette un scalaire hors du groupe de la courbe (nul,
+    // ou supérieur à son ordre) : ce n'est alors pas une clé privée P-256.
+    return false;
+  }
 }
 
 const envSchema = z.object({
@@ -110,7 +131,17 @@ const envSchema = z.object({
     }),
 
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
-}).transform((valeurs) => ({
+})
+  // Ne s'exécute que si chaque champ est déjà valide (comportement de zod 4) :
+  // une clé de mauvaise longueur garde son propre message, plus précis.
+  .refine((valeurs) => paireVapidCoherente(valeurs.VAPID_PUBLIC_KEY, valeurs.VAPID_PRIVATE_KEY), {
+    path: ["VAPID_PUBLIC_KEY"],
+    message:
+      "VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY do not form a valid key pair: the public key " +
+      "is not derived from the private key. Replace BOTH lines with a pair generated " +
+      "together (`npx web-push generate-vapid-keys`).",
+  })
+  .transform((valeurs) => ({
   ...valeurs,
   // Repli sur la première origine autorisée quand APP_URL n'est pas définie —
   // c'est exactement ce que valait CORS_ORIGIN avant qu'il ne devienne une

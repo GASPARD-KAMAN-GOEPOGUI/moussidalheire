@@ -13,11 +13,22 @@ import type { CreerAbonnementPushInput } from "@/validators/push.validator";
  */
 webpush.setVapidDetails(env.VAPID_SUBJECT, env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY);
 
-/** Codes par lesquels un service push signale un abonnement définitivement
- * mort : application désinstallée, données du navigateur effacées, ou
- * autorisation révoquée. Toute autre erreur (429, 5xx) est temporaire et ne
- * doit surtout pas entraîner de suppression. */
-const CODES_ABONNEMENT_MORT = new Set([404, 410]);
+/** Codes par lesquels un service push signale un abonnement inutilisable :
+ * - 404/410 : abonnement mort — application désinstallée, données du
+ *   navigateur effacées, ou autorisation révoquée ;
+ * - 401/403 : abonnement créé avec une autre clé VAPID que celle du serveur,
+ *   typiquement après une rotation de clés. Il ne redeviendra jamais valide :
+ *   le navigateur doit se réabonner avec la nouvelle clé, ce que le frontend
+ *   fait de lui-même au chargement (voir usePushNotifications.ts).
+ *
+ * Revers de 401/403 : une paire VAPID incohérente côté serveur (clé publique
+ * et privée ne se correspondant pas) les provoquerait pour TOUS les
+ * abonnements, qui seraient alors tous purgés. D'où le refus de démarrer
+ * dans ce cas (voir env.ts::paireVapidCoherente).
+ *
+ * Toute autre erreur (429, 5xx) est temporaire et ne doit surtout pas
+ * entraîner de suppression. */
+const CODES_ABONNEMENT_INUTILISABLE = new Set([401, 403, 404, 410]);
 
 export interface ContenuNotification {
   titre: string;
@@ -93,7 +104,7 @@ async function envoyerVers(
         envoyes += 1;
       } catch (error) {
         echecs += 1;
-        if (error instanceof WebPushError && CODES_ABONNEMENT_MORT.has(error.statusCode)) {
+        if (error instanceof WebPushError && CODES_ABONNEMENT_INUTILISABLE.has(error.statusCode)) {
           await pushRepository.supprimerParEndpoint(abonnement.endpoint);
           purges += 1;
           return;

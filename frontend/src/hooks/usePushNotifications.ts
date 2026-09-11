@@ -4,23 +4,24 @@ import {
   getClePubliquePush,
   supprimerAbonnementPush,
 } from "@/services/api/push";
+import { base64UrlVersOctets, remplacerAbonnementSiCleObsolete } from "@/lib/push-abonnement";
+
+function verifierCle(pushManager: PushManager) {
+  return remplacerAbonnementSiCleObsolete({
+    pushManager,
+    obtenirClePublique: getClePubliquePush,
+    enregistrer: enregistrerAbonnementPush,
+    supprimer: supprimerAbonnementPush,
+  });
+}
 
 /**
- * `applicationServerKey` n'accepte pas la clé en base64url : il lui faut les
- * octets bruts. Cette conversion est le passage obligé de toute implémentation
- * Web Push — sans elle, `subscribe()` échoue sur une erreur peu parlante.
+ * Vérification de clé du chargement, partagée au niveau du module : une seule
+ * par chargement du site. En développement, StrictMode monte deux fois les
+ * effets — deux vérifications concurrentes désabonneraient et réabonneraient
+ * l'appareil deux fois de suite.
  */
-// Le type de retour est explicitement adossé à un `ArrayBuffer` : depuis
-// TypeScript 6, un `Uint8Array` générique peut reposer sur un
-// `SharedArrayBuffer`, que `applicationServerKey` n'accepte pas.
-function base64UrlVersOctets(base64Url: string): Uint8Array<ArrayBuffer> {
-  const remplissage = "=".repeat((4 - (base64Url.length % 4)) % 4);
-  const base64 = (base64Url + remplissage).replace(/-/g, "+").replace(/_/g, "/");
-  const binaire = window.atob(base64);
-  const octets = new Uint8Array(new ArrayBuffer(binaire.length));
-  for (let i = 0; i < binaire.length; i += 1) octets[i] = binaire.charCodeAt(i);
-  return octets;
-}
+let verificationAuChargement: Promise<unknown> | null = null;
 
 export type EtatPermission = NotificationPermission | "indisponible";
 
@@ -53,12 +54,26 @@ export function usePushNotifications() {
   const [enCours, setEnCours] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
 
-  // État initial : l'appareil est-il déjà abonné ?
+  // Au chargement : remplacer un abonnement lié à une ancienne clé VAPID (voir
+  // remplacerAbonnementSiCleObsolete), puis relever l'état réel de l'appareil.
+  // Ce hook ne vit que dans l'en-tête de l'espace connecté : la session
+  // exigée pour réenregistrer l'abonnement est donc bien établie.
   useEffect(() => {
     if (!supporte) return;
     let annule = false;
     void navigator.serviceWorker.ready
-      .then((registration) => registration.pushManager.getSubscription())
+      .then(async (registration) => {
+        // Sans permission, le navigateur a déjà supprimé tout abonnement :
+        // rien à vérifier.
+        if (Notification.permission === "granted") {
+          verificationAuChargement ??= verifierCle(registration.pushManager).catch(() => {
+            // Silencieux : l'état relevé juste après reflète l'issue réelle
+            // (au pire « non abonné »), et l'utilisateur peut réactiver.
+          });
+          await verificationAuChargement;
+        }
+        return registration.pushManager.getSubscription();
+      })
       .then((abonnement) => {
         if (!annule) setAbonne(abonnement !== null);
       })
@@ -87,6 +102,12 @@ export function usePushNotifications() {
 
       const registration = await navigator.serviceWorker.ready;
       const clePublique = await getClePubliquePush();
+
+      // Un abonnement lié à une ancienne clé ne doit pas être réutilisé tel
+      // quel : on attend la vérification du chargement si elle tourne encore,
+      // puis on revérifie — elle a pu échouer, faute de réseau par exemple.
+      await verificationAuChargement;
+      await verifierCle(registration.pushManager);
 
       // Réutilise l'abonnement existant s'il y en a un : `subscribe()` sur un
       // abonnement déjà actif renvoie le même, mais mieux vaut ne pas
