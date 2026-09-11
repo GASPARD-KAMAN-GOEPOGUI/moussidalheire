@@ -104,6 +104,27 @@ export async function obtenirUtilisateurParId(id: number): Promise<UtilisateurPu
   return toUtilisateurPublic(utilisateur);
 }
 
+/**
+ * Réservé à la vérification des jetons (auth.middleware.ts, rafraîchissement
+ * de session) : l'utilisateur public, plus la date de dernière réinitialisation
+ * du mot de passe, que `UtilisateurPublic` ne porte volontairement pas. Une
+ * seule requête, comme `obtenirUtilisateurParId`.
+ */
+export async function obtenirUtilisateurPourAuthentification(
+  id: number,
+): Promise<{ utilisateur: UtilisateurPublic; motDePasseModifieLe: Date | null }> {
+  const utilisateur = await utilisateursRepository.trouverParId(id);
+  if (!utilisateur) {
+    throw AppError.notFound("Utilisateur introuvable.");
+  }
+  return {
+    utilisateur: toUtilisateurPublic(utilisateur),
+    // `?? null` : les tests qui simulent le dépôt renvoient des objets sans ce
+    // champ — il faut les traiter comme un compte jamais réinitialisé.
+    motDePasseModifieLe: utilisateur.motDePasseModifieLe ?? null,
+  };
+}
+
 export async function listerUtilisateurs(
   query: ListUtilisateursQuery,
 ): Promise<{ utilisateurs: UtilisateurPublic[]; pagination: Pagination }> {

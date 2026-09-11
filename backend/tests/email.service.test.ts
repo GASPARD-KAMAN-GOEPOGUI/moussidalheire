@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * `nodemailer` est mocké ici (contrairement à auth.service.test.ts, qui
@@ -7,6 +7,27 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * `sendMail` (TEST 5), et que l'envoi existant continue de fonctionner
  * après l'introduction des templates (TEST 6, régression).
  */
+/**
+ * Configuration SMTP propre à ce fichier. La suite neutralise SMTP pour tous
+ * les tests (vitest.config.mts) ; ce fichier-ci a au contraire besoin d'un
+ * transporteur, puisqu'il vérifie ce qui arrive à `sendMail`. Avant, il
+ * s'appuyait sur le `.env` du développeur : il échouait sur toute machine sans
+ * SMTP configuré. Les valeurs sont fictives — `nodemailer` est simulé — et le
+ * domaine `.invalid`, réservé, garantit que rien ne pourrait partir même si
+ * la simulation sautait. Posées avant l'import du service (`vi.hoisted`),
+ * retirées en fin de fichier pour ne pas contaminer les suivants.
+ */
+vi.hoisted(() => {
+  vi.stubEnv("SMTP_HOST", "smtp.invalid");
+  vi.stubEnv("SMTP_PORT", "587");
+  vi.stubEnv("SMTP_USER", "test@smtp.invalid");
+  vi.stubEnv("SMTP_PASSWORD", "fictif");
+});
+
+afterAll(() => {
+  vi.unstubAllEnvs();
+});
+
 const { sendMailMock, createTransportMock } = vi.hoisted(() => {
   const sendMailMock = vi.fn().mockResolvedValue(undefined);
   const createTransportMock = vi.fn(() => ({ sendMail: sendMailMock }));

@@ -89,8 +89,19 @@ model Utilisateur {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  /// Date de la dernière réinitialisation du mot de passe. Tout jeton (accès
+  /// ou rafraîchissement) émis AVANT cette date est refusé : c'est ce qui
+  /// déconnecte un éventuel intrus, les JWT étant sans état et donc
+  /// irrévocables autrement. `null` pour un compte jamais réinitialisé —
+  /// aucun jeton n'est alors concerné. Jamais exposée dans une réponse d'API
+  /// (voir `toUtilisateurPublic`).
+  motDePasseModifieLe DateTime? @map("mot_de_passe_modifie_le")
+
   /// Abonnements Web Push de ce compte — un par appareil/navigateur.
   pushSubscriptions PushSubscription[]
+
+  /// Codes de réinitialisation de mot de passe émis pour ce compte.
+  passwordResetTokens PasswordResetToken[]
 
   @@index([personneId])
   @@index([actif])
@@ -142,6 +153,40 @@ model PushSubscription {
   /// abonnements de ce compte » est la requête dominante.
   @@index([utilisateurId])
   @@map("push_subscriptions")
+}
+
+/// Code à usage unique de réinitialisation du mot de passe, envoyé par e-mail.
+///
+/// Le code lui-même n'est jamais stocké : seulement son hash bcrypt. Si la
+/// base fuitait, les codes en cours ne seraient pas exploitables.
+///
+/// Un code est utilisable tant que : `utiliseA` est nul, `expiresAt` n'est pas
+/// dépassé et `tentatives` est inférieur au plafond (voir
+/// password-reset.service.ts). Aucune colonne « invalidé » : ces trois
+/// conditions suffisent à le décrire.
+model PasswordResetToken {
+  id String @id @default(uuid()) @db.Char(36)
+
+  utilisateurId Int         @map("utilisateur_id")
+  /// Cascade : un compte supprimé physiquement emporte ses codes.
+  utilisateur   Utilisateur @relation(fields: [utilisateurId], references: [id], onDelete: Cascade)
+
+  /// Hash bcrypt du code, jamais le code en clair.
+  codeHash String @map("code_hash") @db.VarChar(255)
+
+  expiresAt DateTime @map("expires_at")
+
+  /// Essais incorrects. Le code est inutilisable une fois le plafond atteint.
+  tentatives Int @default(0)
+
+  /// Renseigné quand le code a servi à réinitialiser le mot de passe : il ne
+  /// sert qu'une fois.
+  utiliseA DateTime? @map("utilise_a")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([utilisateurId])
+  @@map("password_reset_tokens")
 }
 
 enum RoleUtilisateur {

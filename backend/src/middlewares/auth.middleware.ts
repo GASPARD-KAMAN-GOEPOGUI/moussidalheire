@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
-import { verifierToken } from "@/utils/jwt";
-import { obtenirUtilisateurParId } from "@/services/utilisateurs.service";
+import { jetonRevoque, verifierToken } from "@/utils/jwt";
+import { obtenirUtilisateurPourAuthentification } from "@/services/utilisateurs.service";
 import { AppError } from "@/utils/app-error";
 import type { UtilisateurPublic } from "@/types/utilisateur";
 
@@ -20,12 +20,22 @@ declare global {
 
 const BEARER_PREFIX = "Bearer ";
 
+/** Message renvoyé à un jeton émis avant la dernière réinitialisation. */
+const MESSAGE_SESSION_REVOQUEE =
+  "Votre mot de passe a été réinitialisé : cette session n'est plus valide. Veuillez vous reconnecter.";
+
 /**
  * Verifies `Authorization: Bearer <token>`, loads the corresponding
  * utilisateur, and attaches it to `req.utilisateur`. 401 on a missing header,
  * a malformed/expired/bad-signature token, or an utilisateur that no longer
  * exists/is deactivated (a valid token for a since-deactivated account must
  * not keep working).
+ *
+ * 401 également pour un jeton émis avant la dernière réinitialisation du mot
+ * de passe (voir `jetonRevoque`) : c'est ce qui déconnecte un éventuel intrus.
+ * Un compte jamais réinitialisé n'est pas concerné, ses jetons passent comme
+ * avant. Le frontend, sur ce 401, tente un rafraîchissement — lui aussi refusé
+ * (voir auth.service.ts::rafraichir) — puis déconnecte.
  */
 export async function requireAuth(req: Request, _res: Response, next: NextFunction): Promise<void> {
   const header = req.headers.authorization;
@@ -38,9 +48,15 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
 
   try {
     const payload = verifierToken(token);
-    const utilisateur = await obtenirUtilisateurParId(payload.utilisateurId);
+    const { utilisateur, motDePasseModifieLe } = await obtenirUtilisateurPourAuthentification(
+      payload.utilisateurId,
+    );
     if (!utilisateur.actif || utilisateur.supprime) {
       next(AppError.unauthorized("Ce compte est désactivé."));
+      return;
+    }
+    if (jetonRevoque(payload.emisLe, motDePasseModifieLe)) {
+      next(AppError.unauthorized(MESSAGE_SESSION_REVOQUEE));
       return;
     }
     req.utilisateur = utilisateur;
@@ -71,8 +87,16 @@ export async function attachUtilisateurSiPresent(
 
   try {
     const payload = verifierToken(header.slice(BEARER_PREFIX.length));
-    const utilisateur = await obtenirUtilisateurParId(payload.utilisateurId);
-    if (utilisateur.actif && !utilisateur.supprime) {
+    const { utilisateur, motDePasseModifieLe } = await obtenirUtilisateurPourAuthentification(
+      payload.utilisateurId,
+    );
+    // Un jeton révoqué est traité comme une absence de jeton : la route reste
+    // accessible, mais sans la vue personnalisée.
+    if (
+      utilisateur.actif &&
+      !utilisateur.supprime &&
+      !jetonRevoque(payload.emisLe, motDePasseModifieLe)
+    ) {
       req.utilisateur = utilisateur;
     }
   } catch {

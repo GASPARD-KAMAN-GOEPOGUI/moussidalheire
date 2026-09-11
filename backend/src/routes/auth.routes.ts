@@ -7,13 +7,19 @@ import {
   connexion,
   inscription,
   moi,
+  motDePasseOublie,
   rafraichir,
+  reinitialiserMotDePasse,
+  verifierCode,
 } from "@/controllers/auth.controller";
 import {
   changerMotDePasseSchema,
   connexionSchema,
   inscriptionSchema,
+  motDePasseOublieSchema,
   rafraichirSchema,
+  reinitialiserMotDePasseSchema,
+  verifierCodeSchema,
 } from "@/validators/auth.validator";
 
 /**
@@ -23,8 +29,12 @@ import {
  * frontend silently renew an expired access token (refresh) without
  * involving the mot de passe again, and lets the currently authenticated
  * utilisateur change their own mot de passe. No logout route: JWTs are
- * stateless — logout is purely a client-side "forget the tokens", nothing to
- * invalidate server-side.
+ * stateless — logout is purely a client-side "forget the tokens".
+ *
+ * Seule exception à cette absence d'invalidation côté serveur : la
+ * réinitialisation du mot de passe par code e-mail (mot-de-passe-oublie,
+ * verifier-code, reinitialiser-mot-de-passe), qui révoque d'un coup toutes
+ * les sessions ouvertes du compte — voir jwt.ts::jetonRevoque.
  */
 export const authRouter = Router();
 
@@ -38,6 +48,36 @@ const connexionLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+/**
+ * Limiteurs de la réinitialisation par code, plus stricts que /connexion.
+ *
+ * La demande de code est la cible la plus exposée : chaque appel déclenche un
+ * vrai e-mail, et l'endpoint pourrait servir à inonder une boîte de messages.
+ * Trois par quart d'heure laissent une demande initiale et deux renvois.
+ * La vérification tolère plus d'essais par IP, le plafond réel étant de cinq
+ * essais par code (voir password-reset.service.ts). La réinitialisation n'est
+ * appelée qu'une fois par procédure réussie.
+ */
+const MESSAGE_TROP_DE_DEMANDES = {
+  success: false,
+  message: "Trop de tentatives. Patientez quelques minutes avant de réessayer.",
+  error: { code: "TOO_MANY_REQUESTS" },
+};
+
+function limiteur(limit: number) {
+  return rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: MESSAGE_TROP_DE_DEMANDES,
+  });
+}
+
+const demandeCodeLimiter = limiteur(3);
+const verifierCodeLimiter = limiteur(10);
+const reinitialisationLimiter = limiteur(5);
 
 /**
  * @openapi
@@ -193,3 +233,90 @@ authRouter.get("/moi", requireAuth, moi);
  *         description: Le nouveau mot de passe est identique à l'actuel.
  */
 authRouter.post("/mot-de-passe", requireAuth, validate(changerMotDePasseSchema), changerMotDePasse);
+
+/**
+ * @openapi
+ * /auth/mot-de-passe-oublie:
+ *   post:
+ *     summary: Demande un code de réinitialisation par e-mail (réponse identique que le compte existe ou non)
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [identifiant]
+ *             properties:
+ *               identifiant: { type: string, description: "Identifiant, e-mail, matricule ou numéro de téléphone — comme à la connexion." }
+ *     responses:
+ *       200:
+ *         description: Réponse neutre — un code a peut-être été envoyé. Les codes précédents du compte sont invalidés.
+ *       400:
+ *         description: Erreur de validation.
+ *       429:
+ *         description: Trop de demandes (3 par quart d'heure et par IP).
+ */
+authRouter.post(
+  "/mot-de-passe-oublie",
+  demandeCodeLimiter,
+  validate(motDePasseOublieSchema),
+  motDePasseOublie,
+);
+
+/**
+ * @openapi
+ * /auth/verifier-code:
+ *   post:
+ *     summary: Vérifie un code de réinitialisation et renvoie un jeton temporaire (10 minutes)
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [identifiant, code]
+ *             properties:
+ *               identifiant: { type: string }
+ *               code: { type: string, description: "6 caractères, majuscules et chiffres. Espaces et tirets ignorés." }
+ *     responses:
+ *       200:
+ *         description: Code valide — `jeton` à présenter à /auth/reinitialiser-mot-de-passe.
+ *       400:
+ *         description: Code invalide ou expiré (même message dans tous les cas d'échec). Invalidé après 5 essais.
+ *       429:
+ *         description: Trop de tentatives (10 par quart d'heure et par IP).
+ */
+authRouter.post("/verifier-code", verifierCodeLimiter, validate(verifierCodeSchema), verifierCode);
+
+/**
+ * @openapi
+ * /auth/reinitialiser-mot-de-passe:
+ *   post:
+ *     summary: Définit le nouveau mot de passe et ferme toutes les sessions ouvertes du compte
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [jeton, nouveauMotDePasse]
+ *             properties:
+ *               jeton: { type: string, description: "Jeton renvoyé par /auth/verifier-code." }
+ *               nouveauMotDePasse: { type: string, format: password, minLength: 8 }
+ *     responses:
+ *       200:
+ *         description: Mot de passe réinitialisé ; tous les jetons émis auparavant sont révoqués.
+ *       400:
+ *         description: Jeton expiré ou déjà utilisé, ou mot de passe trop faible.
+ *       429:
+ *         description: Trop de tentatives (5 par quart d'heure et par IP).
+ */
+authRouter.post(
+  "/reinitialiser-mot-de-passe",
+  reinitialisationLimiter,
+  validate(reinitialiserMotDePasseSchema),
+  reinitialiserMotDePasse,
+);

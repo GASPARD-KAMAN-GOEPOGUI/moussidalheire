@@ -1,13 +1,17 @@
 import type { Request, Response } from "express";
 import type { ParamsDictionary } from "express-serve-static-core";
 import * as authService from "@/services/auth.service";
+import * as passwordResetService from "@/services/password-reset.service";
 import { sendSuccess } from "@/utils/response";
 import { AppError } from "@/utils/app-error";
 import type {
   ChangerMotDePasseInput,
   ConnexionInput,
   InscriptionInput,
+  MotDePasseOublieInput,
   RafraichirInput,
+  ReinitialiserMotDePasseInput,
+  VerifierCodeInput,
 } from "@/validators/auth.validator";
 
 /**
@@ -89,4 +93,42 @@ export async function changerMotDePasse(
   }
   await authService.changerMotDePasse(req.utilisateur.id, req.body);
   sendSuccess(res, 200, "Mot de passe mis à jour avec succès.");
+}
+
+/**
+ * Réponse strictement identique que le compte existe ou non — voir
+ * password-reset.service.ts::demanderCode. Le message évoque donc
+ * l'éventualité (« si un compte correspond ») plutôt qu'un envoi certain.
+ */
+export async function motDePasseOublie(
+  req: Request<ParamsDictionary, unknown, MotDePasseOublieInput>,
+  res: Response,
+): Promise<void> {
+  await passwordResetService.demanderCode(req.body.identifiant);
+  sendSuccess(
+    res,
+    200,
+    "Si un compte correspond à cet identifiant, un code de réinitialisation vient d'être envoyé à l'adresse e-mail associée.",
+    { dureeValiditeMinutes: passwordResetService.DUREE_VALIDITE_CODE_MINUTES },
+  );
+}
+
+export async function verifierCode(
+  req: Request<ParamsDictionary, unknown, VerifierCodeInput>,
+  res: Response,
+): Promise<void> {
+  const jeton = await passwordResetService.verifierCode(req.body.identifiant, req.body.code);
+  sendSuccess(res, 200, "Code vérifié. Vous pouvez définir votre nouveau mot de passe.", { jeton });
+}
+
+export async function reinitialiserMotDePasse(
+  req: Request<ParamsDictionary, unknown, ReinitialiserMotDePasseInput>,
+  res: Response,
+): Promise<void> {
+  await passwordResetService.reinitialiser(req.body.jeton, req.body.nouveauMotDePasse);
+  sendSuccess(
+    res,
+    200,
+    "Votre mot de passe a été réinitialisé. Toutes vos sessions ont été fermées : connectez-vous avec votre nouveau mot de passe.",
+  );
 }

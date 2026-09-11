@@ -33,8 +33,8 @@ import {
   trouverEntreAvecClient,
 } from "@/repositories/union.repository";
 import { genererMotDePasseAleatoire, hacherMotDePasse, verifierMotDePasse } from "@/utils/password";
-import { signerToken, signerRefreshToken, verifierRefreshToken } from "@/utils/jwt";
-import { obtenirUtilisateurParId } from "@/services/utilisateurs.service";
+import { jetonRevoque, signerToken, signerRefreshToken, verifierRefreshToken } from "@/utils/jwt";
+import { obtenirUtilisateurPourAuthentification } from "@/services/utilisateurs.service";
 import { envoyerEmailBienvenue, envoyerEmailInscriptionComplete } from "@/services/email.service";
 import { AppError } from "@/utils/app-error";
 import { toUtilisateurPublic, type UtilisateurPublic } from "@/types/utilisateur";
@@ -945,7 +945,9 @@ export async function inscrire(input: InscriptionInput): Promise<ResultatInscrip
  * échoue, ce qui est le comportement voulu — retrouver la personne n'est pas
  * lui ouvrir une session.
  */
-async function resoudreUtilisateurPourConnexion(valeur: string): Promise<Utilisateur | null> {
+/** Exportée pour la réinitialisation du mot de passe, qui accepte exactement
+ * les mêmes identifiants que la connexion (voir password-reset.service.ts). */
+export async function resoudreUtilisateurPourConnexion(valeur: string): Promise<Utilisateur | null> {
   const saisie = valeur.trim();
   if (!saisie) return null;
 
@@ -990,17 +992,28 @@ export async function connecter(input: ConnexionInput): Promise<ResultatConnexio
  * brand-new refresh token with a fresh expiry (sliding window), never the
  * same one echoed back: as long as the frontend calls this before the
  * previous refresh token's (long) expiry, a genuinely active member is never
- * forced to log back in. No revocation list exists (same deliberately
- * stateless design as the access token — see jwt.ts), so, like the access
- * token, a leaked refresh token remains usable until it naturally expires;
- * this is an accepted trade-off for this application (see the module's
- * design notes), not an oversight.
+ * forced to log back in.
+ *
+ * Toujours aucune liste de révocation : les jetons restent sans état. Mais un
+ * jeton de rafraîchissement émis avant la dernière réinitialisation du mot de
+ * passe est refusé (voir `jetonRevoque`). Ce contrôle est indispensable ici
+ * et pas seulement dans `requireAuth` : sans lui, le jeton de rafraîchissement
+ * d'un intrus — valable trente jours — continuerait de lui fabriquer des
+ * jetons d'accès neufs, eux-mêmes émis après la réinitialisation et donc
+ * acceptés partout.
  */
 export async function rafraichir(input: RafraichirInput): Promise<ResultatRafraichissement> {
   const payload = verifierRefreshToken(input.refreshToken);
-  const utilisateur = await obtenirUtilisateurParId(payload.utilisateurId);
+  const { utilisateur, motDePasseModifieLe } = await obtenirUtilisateurPourAuthentification(
+    payload.utilisateurId,
+  );
   if (!utilisateur.actif || utilisateur.supprime) {
     throw AppError.unauthorized("Ce compte est désactivé.");
+  }
+  if (jetonRevoque(payload.emisLe, motDePasseModifieLe)) {
+    throw AppError.unauthorized(
+      "Votre mot de passe a été réinitialisé : cette session n'est plus valide. Veuillez vous reconnecter.",
+    );
   }
 
   const payloadJeton = { utilisateurId: utilisateur.id, utilisateurUuid: utilisateur.uuid };

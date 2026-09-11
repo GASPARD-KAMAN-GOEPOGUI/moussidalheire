@@ -11,14 +11,25 @@ import type { Utilisateur } from "@/models/utilisateur.model";
  * frontend only ever addresses a personne by uuid, never by `personneId`, so
  * a client holding a `UtilisateurPublic` (e.g. from `/auth/moi`) needs this
  * to resolve "my own fiche" without a dedicated lookup-by-numeric-id route.
+ *
+ * `motDePasseModifieLe` est retiré lui aussi : il ne sert qu'à révoquer les
+ * jetons émis avant une réinitialisation (voir auth.middleware.ts) et n'a rien
+ * à faire dans une réponse. Le middleware le lit par
+ * `obtenirUtilisateurPourAuthentification`, jamais par ce type.
  */
-export type UtilisateurPublic = Omit<Utilisateur, "motDePasseHash"> & { personneUuid?: string };
+export type UtilisateurPublic = Omit<Utilisateur, "motDePasseHash" | "motDePasseModifieLe"> & {
+  personneUuid?: string;
+};
 
 /**
  * Every repository/service function that hands a user back to a controller for an
  * HTTP response must go through this — never return the raw Prisma row directly.
  */
 export function toUtilisateurPublic(utilisateur: Utilisateur): UtilisateurPublic {
-  const { motDePasseHash: _motDePasseHash, ...utilisateurPublic } = utilisateur;
+  const {
+    motDePasseHash: _motDePasseHash,
+    motDePasseModifieLe: _motDePasseModifieLe,
+    ...utilisateurPublic
+  } = utilisateur;
   return utilisateurPublic;
 }

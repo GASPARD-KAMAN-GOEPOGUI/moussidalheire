@@ -16,7 +16,25 @@ export default defineConfig({
     fileParallelism: false,
     env: {
       NODE_ENV: "test",
+      // Aucun e-mail réel pendant les tests. Vitest pose ces variables AVANT
+      // que `dotenv` ne lise le `.env`, et `dotenv` ne remplace jamais une
+      // variable déjà définie : elles restent donc vides, `env.ts` les traite
+      // comme absentes, et email.service.ts ne crée aucun transporteur. Sans
+      // ça, les tests d'inscription envoyaient de vrais messages depuis le
+      // compte SMTP configuré vers des adresses de test inexistantes — des
+      // rebonds qui dégradent la réputation du domaine expéditeur. Vérifié
+      // par tests/aucun-envoi-externe.test.ts.
+      SMTP_HOST: "",
+      SMTP_PORT: "",
+      SMTP_USER: "",
+      SMTP_PASSWORD: "",
+      SMTP_FROM: "",
     },
+    // Même garantie pour les notifications push : `web-push` est simulé dans
+    // tous les fichiers de test. La base locale peut contenir de vrais
+    // abonnements (un téléphone de développeur), et la publication d'une
+    // actualité notifie tous les abonnés.
+    setupFiles: ["tests/setup/aucun-envoi-externe.ts"],
   },
   resolve: {
     alias: {

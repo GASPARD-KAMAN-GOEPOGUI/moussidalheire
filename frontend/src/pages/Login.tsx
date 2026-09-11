@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { Eye, EyeOff, LogIn, Sparkles } from "lucide-react";
+import { CheckCircle2, Eye, EyeOff, LogIn, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,6 +28,8 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  // Posé par la page de réinitialisation du mot de passe au moment de rediriger ici.
+  const messageSucces = (location.state as { messageSucces?: string } | null)?.messageSucces;
   const [submitting, setSubmitting] = useState(false);
   const [showNewMember, setShowNewMember] = useState(false);
 
@@ -150,6 +152,16 @@ export default function Login() {
                 </p>
               </div>
 
+              {messageSucces && (
+                <p
+                  role="status"
+                  className="mb-4 flex gap-2 rounded-lg border border-emerald-600/30 bg-emerald-600/10 p-3 text-sm text-emerald-800 dark:text-emerald-400"
+                >
+                  <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                  <span>{messageSucces}</span>
+                </p>
+              )}
+
               <form onSubmit={handleSubmit} className="space-y-4" noValidate>
                 <div className="space-y-1.5">
                   <Label htmlFor="login-email">Identifiant, e-mail, matricule ou téléphone</Label>
@@ -166,7 +178,17 @@ export default function Login() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="login-password">Mot de passe</Label>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <Label htmlFor="login-password">Mot de passe</Label>
+                    {/* L'identifiant déjà saisi suit sur la page de réinitialisation. */}
+                    <Link
+                      to="/mot-de-passe-oublie"
+                      state={{ identifiant: email.trim() }}
+                      className="text-xs text-muted-foreground underline-offset-2 hover:text-primary hover:underline"
+                    >
+                      Mot de passe oublié ?
+                    </Link>
+                  </div>
                   <div className="relative">
                     <Input
                       id="login-password"

@@ -67,7 +67,17 @@ function refreshOnce(): Promise<boolean> {
 /** Endpoints that must never trigger a refresh-and-retry themselves — trying
  * to refresh a session in response to a 401 from `/auth/refresh` itself (an
  * expired/invalid refresh token) would recurse forever. */
-const AUTH_ENDPOINTS_SANS_RETRY = new Set(["/auth/refresh", "/auth/connexion", "/auth/inscription"]);
+const AUTH_ENDPOINTS_SANS_RETRY = new Set([
+  "/auth/refresh",
+  "/auth/connexion",
+  "/auth/inscription",
+  // Réinitialisation du mot de passe : ces routes ne correspondent à aucune
+  // session. Elles ne renvoient jamais 401 (voir jwt.ts côté backend), mais
+  // si c'était un jour le cas, un rafraîchissement n'aurait aucun sens.
+  "/auth/mot-de-passe-oublie",
+  "/auth/verifier-code",
+  "/auth/reinitialiser-mot-de-passe",
+]);
 
 /**
  * Human, French fallback text — used ONLY when the backend response has no

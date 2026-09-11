@@ -1,9 +1,20 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { Download, EllipsisVertical, Plus, Share, Smartphone, WifiOff, Zap } from "lucide-react";
+import {
+  Download,
+  EllipsisVertical,
+  Plus,
+  Share,
+  Smartphone,
+  SquareArrowOutUpRight,
+  WifiOff,
+  X,
+  Zap,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -14,6 +25,7 @@ import {
   useInstallPrompt,
   useOuvertureInstallation,
 } from "@/hooks/useInstallPrompt";
+import { cn } from "@/lib/utils";
 import logo from "@/assets/logo.jpeg";
 
 const BENEFITS = [
@@ -80,9 +92,14 @@ export function InstallButton() {
  * la fait disparaître.
  */
 export function InstallPromptDialog() {
-  const { isInstalled, canPrompt, modeInstallation, promptInstall } = useInstallPrompt();
+  const { isInstalled, canPrompt, modeInstallation, estChromiumSansInvite, promptInstall } =
+    useInstallPrompt();
   const [open, setOpen] = useState(false);
   const { pathname } = useLocation();
+  const instructionsChromiumRef = useRef<HTMLOListElement | null>(null);
+  // Bref surlignage des instructions après un clic sans invite native — voir
+  // handleInstall ci-dessous.
+  const [instructionsEnEvidence, setInstructionsEnEvidence] = useState(false);
 
   // Ouverture manuelle, demandée par le bouton de l'en-tête.
   const ouvrir = useCallback(() => setOpen(true), []);
@@ -113,10 +130,25 @@ export function InstallPromptDialog() {
   if (isInstalled) return null;
 
   async function handleInstall() {
-    await promptInstall();
-    // On ferme quel que soit le choix : accepté, la modale n'a plus d'objet ;
-    // refusé, insister serait pénible.
-    setOpen(false);
+    if (canPrompt) {
+      await promptInstall();
+      // On ferme quel que soit le choix : accepté, la modale n'a plus d'objet ;
+      // refusé, insister serait pénible.
+      setOpen(false);
+      return;
+    }
+
+    // Edge/Chrome sans invite active pour l'instant : aucune API ne peut
+    // déclencher l'installation depuis ce clic (voir useInstallPrompt.ts).
+    // On ne ferme donc PAS la modale — ce serait faire croire à une
+    // installation qui n'a pas eu lieu — et le clic reste utile : il amène
+    // et met en évidence la marche à suivre réelle, déjà affichée juste
+    // au-dessus. Le bouton n'est rendu dans ce cas que si
+    // `estChromiumSansInvite` (voir plus bas) : cette marche à suivre existe
+    // bien pour ce navigateur.
+    instructionsChromiumRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setInstructionsEnEvidence(true);
+    setTimeout(() => setInstructionsEnEvidence(false), 1600);
   }
 
   /** Fermeture sans installer. Rien n'est mémorisé : la modale se represente
@@ -126,9 +158,23 @@ export function InstallPromptDialog() {
   }
 
   return (
+    // Échap et clic à l'extérieur ferment la modale : c'est le comportement
+    // par défaut de Radix, qui passe par `onOpenChange`.
     <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
+        {/* `hideClose` : la croix par défaut du composant partagé est une icône
+            de 16 px à 70 % d'opacité, trop petite pour un doigt. Celle-ci offre
+            une zone de toucher de 40 px, pleinement visible. */}
+        <DialogContent className="max-w-md" hideClose>
+          <DialogClose asChild>
+            <button
+              type="button"
+              aria-label="Fermer"
+              className="absolute right-3 top-3 flex size-10 items-center justify-center rounded-full text-foreground/80 transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <X className="size-5" aria-hidden="true" />
+            </button>
+          </DialogClose>
+          <DialogHeader className="pr-10">
             <div className="flex items-center gap-3">
               <img
                 src={logo}
@@ -185,9 +231,47 @@ export function InstallPromptDialog() {
             </ol>
           )}
 
-          {/* Firefox et consorts : aucune API d'installation, on explique le
-              chemin manuel plutôt que d'afficher un bouton sans effet. */}
-          {modeInstallation === "manuel" && (
+          {/* Edge/Chrome, mais sans invite disponible pour l'instant — le plus
+              souvent parce qu'une invite précédente a déjà été refusée sur ce
+              site, et que le navigateur applique son propre délai avant de la
+              reproposer. Aucune API ne permet de le forcer ; le chemin manuel
+              d'Edge/Chrome, lui, reste toujours disponible. */}
+          {modeInstallation === "manuel" && estChromiumSansInvite && (
+            <ol
+              ref={instructionsChromiumRef}
+              className={cn(
+                "space-y-3 rounded-lg border border-primary/20 bg-primary/5 p-4 transition-shadow",
+                instructionsEnEvidence && "ring-2 ring-primary ring-offset-2 ring-offset-background",
+              )}
+            >
+              <li className="flex items-center gap-3 text-sm text-foreground">
+                <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+                  1
+                </span>
+                <span className="flex flex-wrap items-center gap-1.5">
+                  Cliquez sur
+                  <SquareArrowOutUpRight className="size-4 text-primary" aria-hidden="true" />
+                  <span className="font-medium">l'icône d'installation</span>, à droite de la
+                  barre d'adresse
+                </span>
+              </li>
+              <li className="flex items-center gap-3 text-sm text-foreground">
+                <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+                  2
+                </span>
+                <span className="flex flex-wrap items-center gap-1.5">
+                  Absente ? Ouvrez le menu
+                  <EllipsisVertical className="size-4 text-primary" aria-hidden="true" />
+                  puis <span className="font-medium">« Applications › Installer ce site »</span>
+                </span>
+              </li>
+            </ol>
+          )}
+
+          {/* Tout le reste (Firefox…) : aucune API d'installation, on
+              explique le chemin manuel générique plutôt que d'afficher un
+              bouton sans effet. */}
+          {modeInstallation === "manuel" && !estChromiumSansInvite && (
             <div className="flex gap-3 rounded-lg border border-border bg-muted/40 p-4">
               <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
                 <EllipsisVertical className="size-4.5" aria-hidden="true" />
@@ -201,10 +285,18 @@ export function InstallPromptDialog() {
           )}
 
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <Button variant="ghost" onClick={handleContinuer}>
+            {/* Bouton à contour plutôt que simple texte : l'utilisateur doit
+                repérer d'emblée comment poursuivre sans installer. */}
+            <Button variant="outline" onClick={handleContinuer}>
               Continuer
             </Button>
-            {canPrompt && (
+            {/* Visible dès qu'un clic a une action réelle à accomplir : soit
+                l'invite native (canPrompt), soit — à défaut — amener aux
+                instructions Edge/Chrome (estChromiumSansInvite). Absent sur
+                iOS et les navigateurs génériques (Firefox…), où aucune des
+                deux n'existe : le bouton y serait mort, ce qui est pire que
+                son absence. */}
+            {(canPrompt || estChromiumSansInvite) && (
               <Button onClick={() => void handleInstall()}>
                 <Download aria-hidden="true" />
                 Télécharger et installer

@@ -6,6 +6,7 @@ import { RequireAuth } from "@/components/auth/RequireAuth";
 import { InstallPromptDialog } from "@/components/InstallPrompt";
 
 const Login = lazy(() => import("@/pages/Login"));
+const MotDePasseOublie = lazy(() => import("@/pages/MotDePasseOublie"));
 const Home = lazy(() => import("@/pages/Home"));
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const People = lazy(() => import("@/pages/People"));
@@ -27,6 +28,7 @@ function App() {
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="connexion" element={<Login />} />
+          <Route path="mot-de-passe-oublie" element={<MotDePasseOublie />} />
           <Route
             element={
               <RequireAuth>

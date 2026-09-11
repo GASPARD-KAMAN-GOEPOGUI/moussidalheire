@@ -1,0 +1,44 @@
+<h1 style="margin:0 0 16px; font-family:'Manrope',Helvetica,Arial,sans-serif; font-size:22px; font-weight:700; color:#281f1a; line-height:1.3;">
+  Réinitialisation de votre mot de passe
+</h1>
+
+<p style="margin:0 0 22px;">
+  Vous avez demandé à réinitialiser votre mot de passe sur <strong>{{application}}</strong>. Saisissez ce code dans l'application :
+</p>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f3eee7; border-radius:12px; margin:0 0 16px;">
+  <tr>
+    <td align="center" style="padding:26px 24px;">
+      <p style="margin:0 0 8px; font-size:12px; font-weight:600; color:#78695e; text-transform:uppercase; letter-spacing:0.05em;">Votre code</p>
+      <p style="margin:0; font-size:34px; font-weight:700; color:#281f1a; font-family:'Courier New',Courier,monospace; letter-spacing:0.3em;">{{code}}</p>
+    </td>
+  </tr>
+</table>
+
+<p style="margin:0 0 22px; font-size:14px; color:#78695e;">
+  Ce code est valable <strong>{{duree_minutes}} minutes</strong> et ne sert qu'une seule fois. Après {{tentatives_max}} essais incorrects, il est invalidé.
+</p>
+
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 10px;">
+  <tr>
+    <td style="border-radius:10px; background-color:#b44e22;">
+      <a href="{{action_url}}" target="_blank" style="display:inline-block; padding:14px 30px; font-family:'Inter',Helvetica,Arial,sans-serif; font-size:15px; font-weight:600; color:#fcfaf8; text-decoration:none; border-radius:10px;">
+        Saisir mon code
+      </a>
+    </td>
+  </tr>
+</table>
+<p style="margin:0 0 28px; font-size:12px; color:#78695e;">
+  Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur : {{action_url}}
+</p>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-left:3px solid #b44e22; margin:0;">
+  <tr>
+    <td style="padding:4px 0 4px 16px;">
+      <p style="margin:0 0 6px; font-size:14px; font-weight:700; color:#281f1a;">Vous n'êtes pas à l'origine de cette demande ?</p>
+      <p style="margin:0; font-size:14px; color:#78695e;">
+        Ignorez simplement ce message : votre mot de passe reste inchangé, et personne ne peut le modifier sans ce code. Ne le communiquez jamais, pas même à un administrateur.
+      </p>
+    </td>
+  </tr>
+</table>

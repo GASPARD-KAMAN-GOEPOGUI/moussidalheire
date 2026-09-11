@@ -274,3 +274,41 @@ export const changerMotDePasseSchema = z
   })
   .strict();
 export type ChangerMotDePasseInput = z.infer<typeof changerMotDePasseSchema>;
+
+/** Même règle que `connexionSchema.identifiant` : la réinitialisation accepte
+ * exactement les identifiants de la connexion (voir password-reset.service.ts). */
+const identifiantReinitialisationSchema = z
+  .string()
+  .trim()
+  .min(1, "L'identifiant, l'e-mail, le matricule ou le téléphone est requis.")
+  .max(191, "Cet identifiant est trop long.");
+
+/** Body of `POST /auth/mot-de-passe-oublie`. */
+export const motDePasseOublieSchema = z
+  .object({ identifiant: identifiantReinitialisationSchema })
+  .strict();
+export type MotDePasseOublieInput = z.infer<typeof motDePasseOublieSchema>;
+
+/**
+ * Body of `POST /auth/verifier-code`. Le code n'est pas contraint à six
+ * caractères ici : la saisie peut contenir des espaces ou des tirets, retirés
+ * avant comparaison (voir code-otp.ts::normaliserCode). Un code mal formé
+ * échoue simplement à la comparaison, avec le même message qu'un code faux.
+ */
+export const verifierCodeSchema = z
+  .object({
+    identifiant: identifiantReinitialisationSchema,
+    code: z.string().trim().min(1, "Le code est requis.").max(20, "Ce code est trop long."),
+  })
+  .strict();
+export type VerifierCodeInput = z.infer<typeof verifierCodeSchema>;
+
+/** Body of `POST /auth/reinitialiser-mot-de-passe`. Même règle de complexité
+ * que l'inscription et le changement volontaire (`motDePasseSchema`). */
+export const reinitialiserMotDePasseSchema = z
+  .object({
+    jeton: z.string().min(1, "Le jeton de réinitialisation est requis."),
+    nouveauMotDePasse: motDePasseSchema,
+  })
+  .strict();
+export type ReinitialiserMotDePasseInput = z.infer<typeof reinitialiserMotDePasseSchema>;

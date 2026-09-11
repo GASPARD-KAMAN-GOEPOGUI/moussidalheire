@@ -112,6 +112,27 @@ export function mettreAJourMotDePasse(id: number, motDePasseHash: string): Promi
   return prisma.utilisateur.update({ where: { id }, data: { motDePasseHash } });
 }
 
+/**
+ * Réinitialisation du mot de passe par code e-mail : nouveau hash ET date de
+ * réinitialisation, en une seule écriture. C'est cette date qui révoque tous
+ * les jetons émis auparavant (voir jwt.ts::jetonRevoque) — les deux ne doivent
+ * jamais être dissociés, d'où leur réunion ici plutôt que deux appels.
+ *
+ * Distincte de `mettreAJourMotDePasse` : un changement volontaire depuis une
+ * session ouverte ne déconnecte pas les autres appareils.
+ */
+export function reinitialiserMotDePasse(
+  id: number,
+  motDePasseHash: string,
+  maintenant: Date,
+  client: Prisma.TransactionClient | typeof prisma = prisma,
+): Promise<Utilisateur> {
+  return client.utilisateur.update({
+    where: { id },
+    data: { motDePasseHash, motDePasseModifieLe: maintenant },
+  });
+}
+
 export function definirEtatCompte(id: number, data: EtatCompteData): Promise<Utilisateur> {
   return prisma.utilisateur.update({ where: { id }, data });
 }

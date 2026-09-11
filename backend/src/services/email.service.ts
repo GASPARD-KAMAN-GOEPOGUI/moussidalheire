@@ -233,3 +233,77 @@ export async function envoyerEmailInscriptionComplete(donnees: EmailInscriptionC
     );
   }
 }
+
+export interface EmailCodeReinitialisation {
+  destinataire: string;
+  code: string;
+  dureeMinutes: number;
+  tentativesMax: number;
+}
+
+/** Page de saisie du code, ouverte directement sur cette étape : un
+ * utilisateur qui a fermé l'onglet entre-temps retrouve le bon écran, sans
+ * redemander un code — ce qui invaliderait celui qu'il vient de recevoir. */
+const URL_SAISIE_CODE = `${env.APP_URL}/mot-de-passe-oublie?etape=code`;
+
+/**
+ * Code de réinitialisation du mot de passe. Même politique best-effort que les
+ * autres envois : ne lève jamais, journalise l'échec.
+ *
+ * Le code ne figure ni dans l'objet ni dans le texte d'aperçu, seulement dans
+ * le corps : ces deux champs s'affichent dans les notifications et sur l'écran
+ * verrouillé d'un téléphone, lisibles sans ouvrir le message. Et il n'est
+ * jamais journalisé, configuré ou non.
+ */
+export async function envoyerEmailCodeReinitialisation(
+  donnees: EmailCodeReinitialisation,
+): Promise<void> {
+  if (!transporteur) {
+    logger.warn(
+      { destinataire: donnees.destinataire },
+      "SMTP non configuré (SMTP_HOST/PORT/USER/PASSWORD absents) — code de réinitialisation non envoyé.",
+    );
+    return;
+  }
+
+  const corpsTexte = [
+    "Bonjour,",
+    "",
+    `Vous avez demandé à réinitialiser votre mot de passe sur ${NOM_APPLICATION}.`,
+    "",
+    `Votre code : ${donnees.code}`,
+    "",
+    `Ce code est valable ${donnees.dureeMinutes} minutes et ne sert qu'une seule fois.`,
+    `Après ${donnees.tentativesMax} essais incorrects, il est invalidé.`,
+    "",
+    `Saisir mon code : ${URL_SAISIE_CODE}`,
+    "",
+    "Vous n'êtes pas à l'origine de cette demande ? Ignorez simplement ce message :",
+    "votre mot de passe reste inchangé, et personne ne peut le modifier sans ce code.",
+    "Ne le communiquez jamais, pas même à un administrateur.",
+  ].join("\n");
+
+  const contenu = rendre("auth/code-reinitialisation.html", {
+    application: NOM_APPLICATION,
+    code: donnees.code,
+    duree_minutes: String(donnees.dureeMinutes),
+    tentatives_max: String(donnees.tentativesMax),
+    action_url: URL_SAISIE_CODE,
+  });
+
+  try {
+    await transporteur.sendMail({
+      from: env.SMTP_FROM ?? env.SMTP_USER,
+      to: donnees.destinataire,
+      subject: `${NOM_APPLICATION} — réinitialisation de votre mot de passe`,
+      text: corpsTexte,
+      html: rendreLayout(contenu, "Votre code de réinitialisation de mot de passe"),
+      attachments: piecesJointesLogo,
+    });
+  } catch (error) {
+    logger.error(
+      { err: error, destinataire: donnees.destinataire },
+      "Échec de l'envoi du code de réinitialisation.",
+    );
+  }
+}

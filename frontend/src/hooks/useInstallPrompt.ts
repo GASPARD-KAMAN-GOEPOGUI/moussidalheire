@@ -36,6 +36,26 @@ function detectIOS(): boolean {
 }
 
 /**
+ * Edge ou Chrome desktop/Android, sans que `beforeinstallprompt` ait
+ * (encore) été émis — typiquement parce qu'une invite précédente a déjà été
+ * refusée sur ce site, et que le navigateur applique son propre délai avant
+ * de la reproposer. Aucune API ne permet de forcer ce redéclenchement ; en
+ * attendant, ce repérage sert uniquement à afficher, dans le mode `manuel`,
+ * le chemin réel d'installation de CE navigateur plutôt qu'un message
+ * générique valable pour n'importe lequel (voir InstallPrompt.tsx).
+ *
+ * N'est consulté que lorsque `modeInstallation` vaut déjà `manuel` (donc pas
+ * iOS, où Edge/Chrome partagent de toute façon le mécanisme de Safari).
+ * `OPR/` (Opera) exclu : son propre menu diffère, le message générique reste
+ * plus honnête que d'indiquer un chemin qui n'existe pas chez lui.
+ */
+function detectChromiumSansInvite(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  return /Edg\//.test(ua) || (/Chrome\//.test(ua) && !/OPR\//.test(ua));
+}
+
+/**
  * Capture de `beforeinstallprompt` au niveau du MODULE, et non dans le hook.
  *
  * Chrome émet cet événement au chargement de la page, dès que ses critères
@@ -108,6 +128,7 @@ export function useInstallPrompt() {
   );
   const [justInstalled, setJustInstalled] = useState(false);
   const [isIOS] = useState(detectIOS);
+  const [estChromiumSansInvite] = useState(detectChromiumSansInvite);
 
   // Lancée depuis l'écran d'accueil, l'app tourne en display-mode standalone.
   // Safari iOS ignore cette media query et expose `navigator.standalone` à la
@@ -161,6 +182,10 @@ export function useInstallPrompt() {
     isInstalled,
     /** Quel chemin d'installation proposer sur cet appareil. */
     modeInstallation,
+    /** Edge/Chrome sans invite disponible pour l'instant : affiner le
+     * message générique du mode `manuel` avec le chemin réel de CE
+     * navigateur, plutôt qu'un texte valable pour n'importe lequel. */
+    estChromiumSansInvite,
     promptInstall,
   };
 }
